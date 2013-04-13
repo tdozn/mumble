@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,9 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _TEXTMESSAGE_H
-#define _TEXTMESSAGE_H
+#ifndef TEXTMESSAGE_H_
+#define TEXTMESSAGE_H_
 
-#include "mumble_pch.hpp"
 #include "ui_TextMessage.h"
 
 class TextMessage : public QDialog, public Ui::TextMessage {

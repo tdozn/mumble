@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,16 +28,15 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "SocketRPC.h"
+
+#include "Channel.h"
+#include "ClientUser.h"
 #include "Global.h"
 #include "MainWindow.h"
 #include "ServerHandler.h"
-#include "Channel.h"
-#ifdef COMPAT_CLIENT
-#include "Player.h"
-#else
-#include "ClientUser.h"
-#endif
 
 SocketRPCClient::SocketRPCClient(QLocalSocket *s, QObject *p) : QObject(p), qlsSocket(s), qbBuffer(NULL) {
 	qlsSocket->setParent(this);
@@ -161,11 +160,7 @@ void SocketRPCClient::processXml() {
 				u.setUserName(user);
 				u.addQueryItem(QLatin1String("version"), QLatin1String("1.2.0"));
 				QStringList path;
-#ifdef COMPAT_CLIENT
-				Channel *c = ClientPlayer::get(g.uiSession)->cChannel;
-#else
 				Channel *c = ClientUser::get(g.uiSession)->cChannel;
-#endif
 				while (c->cParent) {
 					path.prepend(c->qsName);
 					c = c->cParent;
@@ -178,14 +173,8 @@ void SocketRPCClient::processXml() {
 			if (iter != qmRequest.constEnd()) {
 				QUrl u = iter.value().toUrl();
 				if (u.isValid() && u.scheme() == QLatin1String("mumble")) {
-#ifdef COMPAT_CLIENT
-					if (u.userName().isEmpty())
-						u.setUserName(QLatin1String("Unknown"));
-					g.mw->openUrl(u);
-#else
 					OpenURLEvent *oue = new OpenURLEvent(u);
 					qApp->postEvent(g.mw, oue);
-#endif
 					ack = true;
 				}
 			} else {

@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,8 +28,8 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _LOOKCONFIG_H
-#define _LOOKCONFIG_H
+#ifndef LOOKCONFIG_H_
+#define LOOKCONFIG_H_
 
 #include "ConfigDialog.h"
 
@@ -51,6 +51,4 @@ class LookConfig : public ConfigWidget, Ui::LookConfig {
 		void on_qpbSkinFile_clicked(bool);
 };
 
-#else
-class LookConfig;
 #endif

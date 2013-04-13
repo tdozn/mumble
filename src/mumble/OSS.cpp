@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,19 +28,20 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "OSS.h"
-#include "User.h"
-#include "Global.h"
-#include "MainWindow.h"
+
 #include <sys/soundcard.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/ioctl.h>
 
-#define NBLOCKS 8
+#include "User.h"
+#include "Global.h"
+#include "MainWindow.h"
 
-#define MAX(a,b)        ( (a) > (b) ? (a) : (b) )
-#define MIN(a,b)        ( (a) < (b) ? (a) : (b) )
+#define NBLOCKS 8
 
 class OSSEnumerator {
 	public:
@@ -237,7 +238,7 @@ void OSSInput::run() {
 	}
 	iMicFreq = ival;
 
-	qWarning("OSSInput: Staring audio capture from %s", device.constData());
+	qWarning("OSSInput: Starting audio capture from %s", device.constData());
 
 	eMicFormat = SampleShort;
 	initializeMixer();
@@ -300,6 +301,8 @@ void OSSOutput::run() {
 	ival = AFMT_S16_NE;
 	if ((ioctl(fd, SNDCTL_DSP_SETFMT, &ival) == -1) || (ival != AFMT_S16_NE)) {
 		qWarning("OSSOutput: Failed to set sound format");
+		if ((ival != AFMT_S16_NE))
+			close(fd);
 		return;
 	}
 
@@ -342,7 +345,7 @@ void OSSOutput::run() {
 
 	int iOutputBlock = (iFrameSize * iMixerFreq) / SAMPLE_RATE;
 
-	qWarning("OSSOutput: Staring audio playback to %s", device.constData());
+	qWarning("OSSOutput: Starting audio playback to %s", device.constData());
 
 	ssize_t blocklen = iOutputBlock * iChannels * sizeof(short);
 	short mbuffer[iOutputBlock * iChannels];
@@ -358,7 +361,11 @@ void OSSOutput::run() {
 		} else {
 			while (! mix(mbuffer, iOutputBlock) && bRunning)
 				this->msleep(20);
-			write(fd, mbuffer, blocklen);
+			ssize_t l = write(fd, mbuffer, blocklen);
+			if (l != blocklen) {
+				qWarning("OSSOutput: Write %ld != %ld", l, blocklen);
+				break;
+			}
 		}
 	}
 	qWarning("OSSOutput: Releasing device");

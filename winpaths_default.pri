@@ -7,16 +7,15 @@
 # to the repository.
 #
 
-ICE_PATH = /dev/Ice
-PROTOBUF_PATH = /dev/protobuf-2.3.0
+ICE_PATH = %PROGPATH%/ZeroC/Ice-3.4.1
+PROTOBUF_PATH = /dev/protobuf-2.4.1
 OPENSSL_PATH = /dev/OpenSSL
-LIBSNDFILE_PATH = /dev/libsndfile
+LIBSNDFILE_PATH = %PROGPATH%/Mega-Nerd/libsndfile
 BOOST_PATH = /dev/Boost
-VLD_PATH = /dev/vld
-BONJOUR_PATH = /dev/Bonjour
-ASIO_PATH = /dev/mumble/asio
-G15SDK_PATH = /dev/G15SDK/SDK
-LIBOGG_PATH = /dev/libogg
+VLD_PATH = %PROGPATH%/Visual Leak Detector
+BONJOUR_PATH = %PROGRAMFILES%/Bonjour SDK
+ASIO_PATH = /dev/asio
+G15SDK_PATH = /dev/G15SDK/LCDSDK
 
 # Include custom file if it exists
 exists(winpaths_custom.pri) {

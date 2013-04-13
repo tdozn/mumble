@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -29,27 +29,30 @@
 */
 
 #ifdef USE_DBUS
-#ifndef _DBUS_H
-#define _DBUS_H
+#ifndef DBUS_H_
+#define DBUS_H_
 
-#include "murmur_pch.h"
+#include <QtDBus/QDBusAbstractAdaptor>
+#include <QtDBus/QDBusConnection>
 
-#include "User.h"
+#include "ACL.h"
 #include "Channel.h"
 #include "Group.h"
-#include "ACL.h"
+#include "Meta.h"
 #include "Server.h"
 #include "ServerDB.h"
-#include "Meta.h"
+#include "User.h"
 
 struct Ban;
+class QDBusObjectPath;
+class QDBusMessage;
 
 struct PlayerInfo {
 	unsigned int session;
 	bool mute, deaf, suppressed;
 	bool selfMute, selfDeaf;
 	int channel;
-	PlayerInfo() { };
+	PlayerInfo() : session(0), mute(false), deaf(false), suppressed(false), selfMute(false), selfDeaf(false), channel(-1) { };
 	PlayerInfo(const User *);
 };
 Q_DECLARE_METATYPE(PlayerInfo);
@@ -59,7 +62,7 @@ struct PlayerInfoExtended : public PlayerInfo {
 	QString name;
 	int onlinesecs;
 	int bytespersec;
-	PlayerInfoExtended() {};
+	PlayerInfoExtended() : id(-1), onlinesecs(-1), bytespersec(-1) {};
 	PlayerInfoExtended(const User *);
 };
 Q_DECLARE_METATYPE(PlayerInfoExtended);
@@ -70,7 +73,7 @@ struct ChannelInfo {
 	QString name;
 	int parent;
 	QList<int> links;
-	ChannelInfo() { };
+	ChannelInfo() : id(-1), parent(-1) { };
 	ChannelInfo(const Channel *c);
 };
 Q_DECLARE_METATYPE(ChannelInfo);
@@ -80,7 +83,7 @@ struct GroupInfo {
 	QString name;
 	bool inherited, inherit, inheritable;
 	QList<int> add, remove, members;
-	GroupInfo() { };
+	GroupInfo() : inherited(false), inherit(false), inheritable(false) { };
 	GroupInfo(const Group *g);
 };
 Q_DECLARE_METATYPE(GroupInfo);
@@ -91,7 +94,7 @@ struct ACLInfo {
 	int playerid;
 	QString group;
 	unsigned int allow, deny;
-	ACLInfo() { };
+	ACLInfo() : applyHere(false), applySubs(false), inherited(false), playerid(-1), allow(0), deny(0) { };
 	ACLInfo(const ChanACL *acl);
 };
 Q_DECLARE_METATYPE(ACLInfo);
@@ -100,7 +103,7 @@ Q_DECLARE_METATYPE(QList<ACLInfo>);
 struct BanInfo {
 	unsigned int address;
 	int bits;
-	BanInfo() { };
+	BanInfo() : address(0), bits(0) { };
 	BanInfo(const Ban &);
 };
 Q_DECLARE_METATYPE(BanInfo);
@@ -143,7 +146,7 @@ class MurmurDBus : public QDBusAbstractAdaptor {
 		static void registerTypes();
 	public slots:
 		// These have the result ref as the first parameter, so won't be converted to DBus
-		void authenticateSlot(int &res, QString &uname, const QList<QSslCertificate> &certs, const QString &certhash, bool strong, const QString &pw);
+		void authenticateSlot(int &res, QString &uname, int sessionId, const QList<QSslCertificate> &certs, const QString &certhash, bool strong, const QString &pw);
 		void registerUserSlot(int &res, const QMap<int, QString> &);
 		void unregisterUserSlot(int &res, int id);
 		void getRegisteredUsersSlot(const QString &filter, QMap<int, QString> &res);
@@ -254,11 +257,5 @@ class MetaDBus : public QDBusAbstractAdaptor {
 		void stopped(int server_id);
 };
 
-
-// extern MurmurDBus *dbus;
-
-#else
-class MurmurDBus;
-class MetaDBus;
 #endif
 #endif

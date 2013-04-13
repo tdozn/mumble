@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,15 +28,16 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <QtXml>
+#include "mumble_pch.hpp"
 
 #include "Usage.h"
-#include "Version.h"
-#include "Global.h"
-#include "OSInfo.h"
-#include "LCD.h"
+
 #include "ClientUser.h"
+#include "LCD.h"
+#include "Global.h"
 #include "NetworkConfig.h"
+#include "OSInfo.h"
+#include "Version.h"
 
 Usage::Usage(QObject *p) : QObject(p) {
 	qbReport.open(QBuffer::ReadWrite);

@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,19 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _PLUGINS_H
-#define _PLUGINS_H
+#ifndef PLUGINS_H_
+#define PLUGINS_H_
+
+#include <QtCore/QObject>
+#include <QtCore/QMutex>
+#include <QtCore/QReadWriteLock>
+#include <QtCore/QUrl>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 #include "ConfigDialog.h"
+
 #include "ui_Plugins.h"
 
 struct PluginInfo;
@@ -93,9 +102,7 @@ class Plugins : public QObject {
 		void rescanPlugins();
 		bool fetch();
 		void checkUpdates();
-		void finished();
+		void fetched(QByteArray, QUrl);
 };
 
-#else
-class Log;
 #endif

@@ -6,10 +6,13 @@ include(../common.pri)
 
 TEMPLATE = app
 CONFIG -= qt app_bundle x86_64
-CONFIG += debug_and_release ppc x86
+CONFIG += debug_and_release x86
+CONFIG(universal) {
+	CONFIG += ppc
+}
 
 TARGET = Mumble.compat
-SOURCES = compat.m
+OBJECTIVE_SOURCES = compat.m
 QMAKE_LFLAGS += -framework ApplicationServices -framework Cocoa -framework AppKit
 
 CONFIG(debug, debug|release) {

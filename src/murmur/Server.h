@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2009, Stefan Hacker <dd0t@users.sourceforge.net>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2009-2011, Stefan Hacker <dd0t@users.sourceforge.net>
 
    All rights reserved.
 
@@ -29,25 +29,46 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _SERVER_H
-#define _SERVER_H
+#ifndef SERVER_H_
+#define SERVER_H_
 
-#include "murmur_pch.h"
-#include "Message.h"
-#include "Timer.h"
-#include "User.h"
-#include "Connection.h"
-#include "Net.h"
-#include "ACL.h"
-#include "DBus.h"
-
-#ifdef USE_BONJOUR
-#include "BonjourServer.h"
+#include <boost/function.hpp>
+#include <QtCore/QEvent>
+#include <QtCore/QMutex>
+#include <QtCore/QTimer>
+#include <QtCore/QQueue>
+#include <QtCore/QReadWriteLock>
+#include <QtCore/QStringList>
+#include <QtCore/QSocketNotifier>
+#include <QtCore/QThread>
+#include <QtCore/QUrl>
+#include <QtNetwork/QSslCertificate>
+#include <QtNetwork/QSslKey>
+#include <QtNetwork/QSslSocket>
+#include <QtNetwork/QTcpServer>
+#ifdef Q_OS_WIN
+#include <windows.h>
 #endif
 
+#include "ACL.h"
+#include "Message.h"
+#include "Mumble.pb.h"
+#include "Net.h"
+#include "Timer.h"
+
+class BonjourServer;
 class Channel;
 class PacketDataStream;
 class ServerUser;
+class User;
+class QNetworkAccessManager;
+
+struct TextMessage {
+	QList<unsigned int> qlSessions;
+	QList<unsigned int> qlChannels;
+	QList<unsigned int> qlTrees;
+	QString qsText;
+};
 
 class LogEmitter : public QObject {
 	private:
@@ -111,6 +132,7 @@ class Server : public QThread {
 		bool bRememberChan;
 		int iMaxTextMessageLength;
 		int iMaxImageMessageLength;
+		int iOpusThreshold;
 		bool bAllowHTML;
 		QString qsPassword;
 		QString qsWelcomeText;
@@ -127,6 +149,10 @@ class Server : public QThread {
 		QRegExp qrUserName;
 		QRegExp qrChannelName;
 
+		QVariant qvSuggestVersion;
+		QVariant qvSuggestPositional;
+		QVariant qvSuggestPushToTalk;
+
 		QList<QSslCertificate> qlCA;
 		QSslCertificate qscCert;
 		QSslKey qskKey;
@@ -140,7 +166,8 @@ class Server : public QThread {
 		int iCodecAlpha;
 		int iCodecBeta;
 		bool bPreferAlpha;
-		void recheckCodecVersions();
+		bool bOpus;
+		void recheckCodecVersions(ServerUser *connectingUser = 0);
 
 #ifdef USE_BONJOUR
 		void initBonjour();
@@ -149,6 +176,10 @@ class Server : public QThread {
 		// Registration, implementation in Register.cpp
 		QTimer qtTick;
 		void initRegister();
+
+	private:
+		int iChannelNestingLimit;
+
 	public slots:
 		void regSslError(const QList<QSslError> &);
 		void finished();
@@ -211,6 +242,7 @@ class Server : public QThread {
 		bool checkDecrypt(ServerUser *u, const char *encrypted, char *plain, unsigned int cryptlen);
 
 		bool hasPermission(ServerUser *p, Channel *c, QFlags<ChanACL::Perm> perm);
+		QFlags<ChanACL::Perm> effectivePermissions(ServerUser *p, Channel *c);
 		void sendClientPermission(ServerUser *u, Channel *c, bool updatelast = false);
 		void flushClientPermissionCache(ServerUser *u, MumbleProto::PermissionQuery &mpqq);
 		void clearACLCache(User *p = NULL);
@@ -237,8 +269,8 @@ class Server : public QThread {
 
 		QString addressToString(const QHostAddress &, unsigned short port);
 
-		void log(const QString &);
-		void log(ServerUser *u, const QString &);
+		void log(const QString &) const;
+		void log(ServerUser *u, const QString &) const;
 
 		void removeChannel(int id);
 		void removeChannel(Channel *c, Channel *dest = NULL);
@@ -248,19 +280,21 @@ class Server : public QThread {
 		Server(int snum, QObject *parent = NULL);
 		~Server();
 
+		bool canNest(Channel *newParent, Channel *channel = NULL) const;
+
 		// RPC functions. Implementation in RPC.cpp
 		void connectAuthenticator(QObject *p);
 		void disconnectAuthenticator(QObject *p);
 		void connectListener(QObject *p);
 		void disconnectListener(QObject *p);
-		void setTempGroups(const int userid, Channel *cChannel, const QStringList &groups);
+		void setTempGroups(int userid, int sessionId, Channel *cChannel, const QStringList &groups);
 		void clearTempGroups(User *user, Channel *cChannel = NULL, bool recurse = true);
 	signals:
 		void registerUserSig(int &, const QMap<int, QString> &);
 		void unregisterUserSig(int &, int);
 		void getRegisteredUsersSig(const QString &, QMap<int, QString > &);
 		void getRegistrationSig(int &, int, QMap<int, QString> &);
-		void authenticateSig(int &, QString &, const QList<QSslCertificate> &, const QString &, bool, const QString &);
+		void authenticateSig(int &, QString &, int, const QList<QSslCertificate> &, const QString &, bool, const QString &);
 		void setInfoSig(int &, int, const QMap<int, QString> &);
 		void setTextureSig(int &, int, const QByteArray &);
 		void idToNameSig(QString &, int);
@@ -268,6 +302,7 @@ class Server : public QThread {
 		void idToTextureSig(QByteArray &, int);
 
 		void userStateChanged(const User *);
+		void userTextMessage(const User *, const TextMessage &);
 		void userConnected(const User *);
 		void userDisconnected(const User *);
 		void channelStateChanged(const Channel *);
@@ -276,13 +311,13 @@ class Server : public QThread {
 
 		void contextAction(const User *, const QString &, unsigned int, int);
 	public:
-		void setUserState(User *p, Channel *parent, bool mute, bool deaf, bool suppressed, bool prioritySpeaker, const QString &comment = QString());
+		void setUserState(User *p, Channel *parent, bool mute, bool deaf, bool suppressed, bool prioritySpeaker, const QString& name = QString(), const QString &comment = QString());
 		bool setChannelState(Channel *c, Channel *parent, const QString &qsName, const QSet<Channel *> &links, const QString &desc = QString(), const int position = 0);
 		void sendTextMessage(Channel *cChannel, ServerUser *pUser, bool tree, const QString &text);
 
 		// Database / DBus functions. Implementation in ServerDB.cpp
 		void initialize();
-		int authenticate(QString &name, const QString &pw, const QStringList &emails = QStringList(), const QString &certhash = QString(), bool bStrongCert = false, const QList<QSslCertificate> & = QList<QSslCertificate>());
+		int authenticate(QString &name, const QString &pw, int sessionId = 0, const QStringList &emails = QStringList(), const QString &certhash = QString(), bool bStrongCert = false, const QList<QSslCertificate> & = QList<QSslCertificate>());
 		Channel *addChannel(Channel *c, const QString &name, bool temporary = false, int position = 0);
 		void removeChannelDB(const Channel *c);
 		void readChannels(Channel *p = NULL);
@@ -308,7 +343,7 @@ class Server : public QThread {
 		void saveBans();
 		QVariant getConf(const QString &key, QVariant def);
 		void setConf(const QString &key, const QVariant &value);
-		void dblog(const QString &str);
+		void dblog(const QString &str) const;
 
 		// From msgHandler. Implementation in Messages.cpp
 #define MUMBLE_MH_MSG(x) void msg##x(ServerUser *, MumbleProto:: x &);
@@ -316,6 +351,4 @@ class Server : public QThread {
 #undef MUMBLE_MH_MSG
 };
 
-#else
-class Server;
 #endif

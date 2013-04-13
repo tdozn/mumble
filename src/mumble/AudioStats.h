@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,12 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _AUDIOSTATS_H
-#define _AUDIOSTATS_H
+#ifndef AUDIOSTATS_H_
+#define AUDIOSTATS_H_
 
-#include "mumble_pch.hpp"
+#include <QtCore/QList>
+#include <QtCore/QTimer>
+#include <QtGui/QWidget>
 
 class AudioBar : public QWidget {
 	private:
@@ -50,16 +52,14 @@ class AudioBar : public QWidget {
 		QList<Qt::BrushStyle> qlReplacementBrushes;
 };
 
-class AudioEchoWidget : public QGLWidget {
+class AudioEchoWidget : public QWidget {
 	private:
 		Q_OBJECT
 		Q_DISABLE_COPY(AudioEchoWidget)
 	public:
 		AudioEchoWidget(QWidget *parent);
-	protected:
-		void initializeGL();
-		void resizeGL(int w, int h);
-		void paintGL();
+	protected slots:
+		void paintEvent(QPaintEvent *event);
 };
 
 class AudioNoiseWidget : public QWidget {

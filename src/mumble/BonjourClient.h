@@ -1,4 +1,4 @@
-/* Copyright (C) 2009, Stefan Hacker
+/* Copyright (C) 2009-2011, Stefan Hacker
 
    All rights reserved.
 
@@ -27,11 +27,14 @@
    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef _BONJOURCLIENT_H
-#define _BONJOURCLIENT_H
 
-#include "bonjourservicebrowser.h"
-#include "bonjourserviceresolver.h"
+#ifndef BONJOURCLIENT_H_
+#define BONJOURCLIENT_H_
+
+#include <QtCore/QObject>
+
+class BonjourServiceBrowser;
+class BonjourServiceResolver;
 
 class BonjourClient : public QObject {
 	private:
@@ -45,6 +48,4 @@ class BonjourClient : public QObject {
 		BonjourServiceResolver *bsrResolver;
 };
 
-#else
-class BonjourClient;
 #endif

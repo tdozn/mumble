@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,6 +28,8 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "Overlay.h"
 #include "OverlayText.h"
 #include "User.h"
@@ -39,10 +41,6 @@
 #include "ServerHandler.h"
 #include "MainWindow.h"
 #include "GlobalShortcut.h"
-
-#if QT_VERSION < 0x040600
-#define toReal toDouble
-#endif
 
 OverlayEditorScene::OverlayEditorScene(const OverlaySettings &srcos, QObject *p) : QGraphicsScene(p), os(srcos) {
 	tsColor = Settings::Talking;
@@ -197,8 +195,6 @@ void OverlayEditorScene::updateSelected() {
 		updateAvatar();
 	else if (qgpiSelected == qgpiName)
 		updateUserName();
-	else if (qgpiSelected == qgpiAvatar)
-		updateAvatar();
 	else if (qgpiSelected == qgpiMuted)
 		updateMuted();
 }
@@ -466,6 +462,9 @@ void OverlayEditorScene::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
 					orig.setBottomRight(orig.topLeft() + sz);
 				}
 				break;
+			case Qt::NoSection:
+				// Handled above, but this makes the compiler happy.
+				return;
 		}
 
 		qgriSelected->setRect(orig);
@@ -784,9 +783,7 @@ void OverlayEditorScene::contextMenuEvent(QGraphicsSceneContextMenuEvent *event)
 			addItem(qgpw);
 
 			qgpw->setZValue(3.0f);
-#if QT_VERSION >= 0x040600
 			qgpw->setPanelModality(QGraphicsItem::PanelModal);
-#endif
 			qgpw->setPos(- qgpw->boundingRect().width() / 2.0f, - qgpw->boundingRect().height() / 2.0f);
 			qgpw->show();
 

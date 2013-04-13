@@ -3,11 +3,12 @@
 #define _MUMBLE_PCH_H
 
 #define QT_NO_DEBUG_STREAM
-#define QT_ASCII_CAST_WARNINGS
 #define QT_NO_CAST_TO_ASCII
+#define QT_NO_CAST_FROM_ASCII
 #define QT_USE_FAST_CONCATENATION
 #define QT_USE_FAST_OPERATOR_PLUS
 
+#define NOMINMAX
 #define _WINSOCKAPI_
 
 #if defined(__INTEL_COMPILER)
@@ -33,7 +34,6 @@
 #include <QtDBus/QtDBus>
 #endif
 #include <QtNetwork/QtNetwork>
-#include <QtOpenGL/QtOpenGL>
 #include <QtSql/QtSql>
 #include <QtXml/QtXml>
 
@@ -46,7 +46,6 @@
 /* OpenSSL defines set_key. This breaks our protobuf-generated setters. */
 #undef set_key
 
-#ifndef COMPAT_CLIENT
 #ifdef Q_OS_WIN
 #define ENABLE_SNDFILE_WINDOWS_PROTOTYPES 1
 #endif
@@ -54,13 +53,10 @@
 #include <sndfile.h>
 #undef __int64_t
 #include <celt.h>
-#include <celt_header.h>
-#else
-#include <ogg/ogg.h>
-#include <speex/speex_callbacks.h>
+#ifdef USE_SBCELT
+#include <sbcelt.h>
 #endif
 #include <speex/speex.h>
-#include <speex/speex_header.h>
 #include <speex/speex_jitter.h>
 #include <speex/speex_preprocess.h>
 #include <speex/speex_echo.h>
@@ -72,13 +68,15 @@
 #include <boost/accumulators/statistics/mean.hpp>
 #include <boost/accumulators/statistics/variance.hpp>
 #include <boost/accumulators/statistics/extended_p_square.hpp>
+#include <boost/bind.hpp>
+#include <boost/enable_shared_from_this.hpp>
+#include <boost/make_shared.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/shared_array.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/scoped_array.hpp>
-#include <boost/weak_ptr.hpp>
-#include <boost/bind.hpp>
 #include <boost/typeof/typeof.hpp>
+#include <boost/weak_ptr.hpp>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -118,12 +116,6 @@ typedef WId HWND;
 
 #ifdef USE_BONJOUR
 #include <dns_sd.h>
-#endif
-
-#ifdef Q_OS_WIN
-#ifdef USE_G15
-#include <lglcd.h>
-#endif
 #endif
 
 #ifdef __OBJC__

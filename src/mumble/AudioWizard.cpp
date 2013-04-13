@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,13 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "AudioWizard.h"
+
 #include "AudioInput.h"
+#include "AudioOutputSample.h"
 #include "Global.h"
-#include "Settings.h"
 #include "Log.h"
 #include "MainWindow.h"
 

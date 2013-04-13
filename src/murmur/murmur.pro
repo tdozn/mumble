@@ -3,7 +3,7 @@ include(../mumble.pri)
 DEFINES *= MURMUR
 TEMPLATE	=app
 CONFIG  *= network
-CONFIG(static) {
+CONFIG(static):!macx {
 	QMAKE_LFLAGS *= -static
 }
 CONFIG	-= gui
@@ -65,18 +65,27 @@ dbus {
 }
 
 ice {
-	slice.target = Murmur.cpp
+	SLICEFILES = Murmur.ice
+
+	slice.output = ${QMAKE_FILE_BASE}.cpp
 	win32 {
-		slice.commands = slice2cpp --checksum -I\"$$ICE_PATH/slice\" Murmur.ice
+		slice.commands = slice2cpp --checksum -I\"$$ICE_PATH/slice\" ${QMAKE_FILE_NAME}
 	} else {
-		slice.commands = slice2cpp --checksum -I/usr/local/share/Ice -I/usr/share/Ice/slice -I/usr/share/slice -I/usr/share/Ice-3.4.1/slice/ -I/usr/share/Ice-3.3.1/slice/ Murmur.ice
+		slice.commands = slice2cpp --checksum -I/usr/local/share/Ice -I/usr/share/Ice/slice -I/usr/share/slice -I/usr/share/Ice-3.4.1/slice/ -I/usr/share/Ice-3.3.1/slice/ -I/usr/share/Ice-3.4.2/slice/ ${QMAKE_FILE_NAME}
 	}
+	slice.input = SLICEFILES
+	slice.CONFIG *= no_link explicit_dependencies
+	slice.variable_out = SOURCES
 
-	slice.depends = Murmur.ice
-	QMAKE_EXTRA_TARGETS *= slice
-	PRE_TARGETDEPS *= Murmur.cpp
+	sliceh.output = ${QMAKE_FILE_BASE}.h
+	sliceh.depends = ${QMAKE_FILE_BASE}.cpp
+	sliceh.commands = $$escape_expand(\\n)
+	sliceh.input = SLICEFILES
+	sliceh.CONFIG *= no_link explicit_dependencies target_predeps
 
-	SOURCES *= Murmur.cpp MurmurIce.cpp
+	QMAKE_EXTRA_COMPILERS *= slice sliceh
+
+	SOURCES *= MurmurIce.cpp
 	HEADERS *= MurmurIce.h
 	win32:CONFIG(debug, debug|release) {
 		LIBS *= -lIceD -lIceUtilD
@@ -91,25 +100,30 @@ ice {
 	}
 
 	macx {
-		INCLUDEPATH *= $$(MUMBLE_PREFIX)/ice-3.4.1/include/
-		QMAKE_LIBDIR *= $$(MUMBLE_PREFIX)/ice-3.4.1/lib/
-		slice.commands = $$(MUMBLE_PREFIX)/ice-3.4.1/bin/slice2cpp --checksum -I$$(MUMBLE_PREFIX)/ice-3.4.1/slice/ Murmur.ice
+		INCLUDEPATH *= $$(MUMBLE_PREFIX)/Ice-3.4.2/include/
+		QMAKE_LIBDIR *= $$(MUMBLE_PREFIX)/Ice-3.4.2/lib/
+		slice.commands = $$(MUMBLE_PREFIX)/Ice-3.4.2/bin/slice2cpp --checksum -I$$(MUMBLE_PREFIX)/Ice-3.4.2/slice/ Murmur.ice
 	}
 
-	unix:CONFIG(static) {
+	unix:!macx:CONFIG(static) {
 		INCLUDEPATH *= /opt/Ice-3.3/include
 		QMAKE_LIBDIR *= /opt/Ice-3.3/lib
 		LIBS *= -lbz2
 		QMAKE_CXXFLAGS *= -fPIC
 		slice.commands = /opt/Ice-3.3/bin/slice2cpp --checksum -I/opt/Ice-3.3/slice Murmur.ice
 	}
+
+	macx:CONFIG(static) {
+		LIBS *= -lbz2 -liconv
+		QMAKE_CXXFLAGS *= -fPIC
+	}
 }
 
 bonjour {
 	DEFINES *= USE_BONJOUR
 
-	HEADERS *= ../bonjour/bonjourrecord.h ../bonjour/bonjourserviceregister.h BonjourServer.h
-	SOURCES *= ../bonjour/bonjourserviceregister.cpp BonjourServer.cpp
+	HEADERS *= ../bonjour/BonjourRecord.h ../bonjour/BonjourServiceRegister.h BonjourServer.h
+	SOURCES *= ../bonjour/BonjourServiceRegister.cpp BonjourServer.cpp
 	INCLUDEPATH *= ../bonjour
 	win32 {
 		INCLUDEPATH *= "$$BONJOUR_PATH/include"

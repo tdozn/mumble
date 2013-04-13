@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,8 +28,11 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "Global.h"
+#include "mumble_pch.hpp"
+
 #include "Cert.h"
+
+#include "Global.h"
 
 #if OPENSSL_VERSION_NUMBER < 0x0090800fL
 /* In OpenSSL version 0.9.8, some functions dealing with output buffers
@@ -455,7 +458,7 @@ Settings::KeyPair CertWizard::importCert(QByteArray data, const QString &pw) {
 	int ret = 0;
 
 	mem = BIO_new_mem_buf(data.data(), data.size());
-	BIO_set_close(mem, BIO_NOCLOSE);
+	Q_UNUSED(BIO_set_close(mem, BIO_NOCLOSE));
 	pkcs = d2i_PKCS12_bio(mem, NULL);
 	if (pkcs) {
 		ret = PKCS12_parse(pkcs, NULL, &pkey, &x509, &certs);
@@ -580,7 +583,7 @@ QByteArray CertWizard::exportCert(const Settings::KeyPair &kp) {
 				long size;
 				mem = BIO_new(BIO_s_mem());
 				i2d_PKCS12_bio(mem, pkcs);
-				BIO_flush(mem);
+				Q_UNUSED(BIO_flush(mem));
 
 				size = BIO_get_mem_data(mem, &data);
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2009, Stefan Hacker
+/* Copyright (C) 2009-2011, Stefan Hacker
 
    All rights reserved.
 
@@ -28,7 +28,12 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "BonjourClient.h"
+
+#include "BonjourServiceBrowser.h"
+#include "BonjourServiceResolver.h"
 
 BonjourClient::BonjourClient() {
 	bsrResolver = NULL;

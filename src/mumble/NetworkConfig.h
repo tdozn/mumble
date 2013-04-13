@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2008-2009, Mikkel Krautz <mikkel@krautz.dk>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2008-2011, Mikkel Krautz <mikkel@krautz.dk>
 
    All rights reserved.
 
@@ -29,8 +29,12 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _NETWORKCONFIG_H
-#define _NETWORKCONFIG_H
+#ifndef NETWORKCONFIG_H_
+#define NETWORKCONFIG_H_
+
+class QNetworkReply;
+class QNetworkRequest;
+class QUrl;
 
 #include "ConfigDialog.h"
 #include "ui_NetworkConfig.h"
@@ -59,6 +63,4 @@ namespace Network {
 	QNetworkReply *get(const QUrl &);
 }
 
-#else
-class NetworkConfig;
 #endif

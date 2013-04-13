@@ -1,5 +1,5 @@
-/* Copyright (C) 2009, Stefan Hacker <dd0t@users.sourceforge.net>
-   Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2009-2011, Stefan Hacker <dd0t@users.sourceforge.net>
+   Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,16 +28,39 @@
    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef CUSTOMELEMENTS_H
-#define CUSTOMELEMENTS_H
 
-#include "mumble_pch.hpp"
+#ifndef CUSTOMELEMENTS_H_
+#define CUSTOMELEMENTS_H_
+
+#include <QtCore/QObject>
+#include <QtGui/QLabel>
+#include <QtGui/QTextBrowser>
+#include <QtGui/QTextEdit>
+
+class LogTextBrowser : public QTextBrowser {
+	private:
+		Q_OBJECT
+		Q_DISABLE_COPY(LogTextBrowser)
+	protected:
+		virtual void resizeEvent(QResizeEvent *e);
+	public:
+		LogTextBrowser(QWidget *p = NULL);
+
+		int getLogScroll();
+		int getLogScrollMaximum();
+		void setLogScroll(int pos);
+		void scrollLogToBottom();
+};
 
 class ChatbarTextEdit : public QTextEdit {
 	private:
 		Q_OBJECT
 		Q_DISABLE_COPY(ChatbarTextEdit)
 		void inFocus(bool);
+		QStringList qslHistory;
+		QString qsHistoryTemp;
+		int iHistoryIndex;
+		static const int MAX_HISTORY = 50;
 	protected:
 		QString qsDefaultText;
 		bool bDefaultVisible;
@@ -55,10 +78,14 @@ class ChatbarTextEdit : public QTextEdit {
 	signals:
 		void tabPressed(void);
 		void ctrlSpacePressed(void);
+		void entered(QString);
 	public slots:
 		void pasteAndSend_triggered();
 		void doResize();
 		void doScrollbar();
+		void addToHistory(const QString &str);
+		void historyUp();
+		void historyDown();
 	public:
 		ChatbarTextEdit(QWidget *p = NULL);
 };
@@ -81,4 +108,4 @@ class DockTitleBar : public QLabel {
 		bool eventFilter(QObject *, QEvent *);
 };
 
-#endif // CUSTOMELEMENTS_H
+#endif // CUSTOMELEMENTS_H_

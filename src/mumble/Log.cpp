@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2009, Stefan Hacker <dd0t@users.sourceforge.net>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2009-2011, Stefan Hacker <dd0t@users.sourceforge.net>
 
    All rights reserved.
 
@@ -29,23 +29,18 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "Log.h"
-#include "TextToSpeech.h"
-#include "MainWindow.h"
+
+#include "AudioOutput.h"
+#include "AudioOutputSample.h"
 #include "Channel.h"
-#include "ServerHandler.h"
-#include "NetworkConfig.h"
 #include "Global.h"
-
-
-#ifdef Q_OS_MAC
-extern bool qt_mac_execute_apple_script(const QString &script, AEDesc *ret);
-
-static bool growl_available(void) {
-	OSStatus err = LSFindApplicationForInfo('GRRR', CFSTR("com.Growl.GrowlHelperApp"), CFSTR("GrowlHelperApp.app"), NULL, NULL);
-	return err != kLSApplicationNotFoundErr;
-}
-#endif
+#include "MainWindow.h"
+#include "NetworkConfig.h"
+#include "ServerHandler.h"
+#include "TextToSpeech.h"
 
 static ConfigWidget *LogConfigDialogNew(Settings &st) {
 	return new LogConfig(st);
@@ -110,9 +105,11 @@ void LogConfig::load(const Settings &r) {
 		i->setCheckState(ColStaticSound, (ml & Settings::LogSoundfile) ? Qt::Checked : Qt::Unchecked);
 		i->setText(ColStaticSoundPath, r.qmMessageSounds.value(mt));
 	}
+	qsbMaxBlocks->setValue(r.iMaxLogBlocks);
 
 	loadSlider(qsVolume, r.iTTSVolume);
 	qsbThreshold->setValue(r.iTTSThreshold);
+	qcbReadBackOwn->setChecked(r.bTTSMessageReadBack);
 	qcbWhisperFriends->setChecked(r.bWhisperFriends);
 }
 
@@ -133,14 +130,17 @@ void LogConfig::save() const {
 		s.qmMessages[mt] = v;
 		s.qmMessageSounds[mt] = i->text(ColStaticSoundPath);
 	}
+	s.iMaxLogBlocks = qsbMaxBlocks->value();
 
 	s.iTTSVolume=qsVolume->value();
 	s.iTTSThreshold=qsbThreshold->value();
+	s.bTTSMessageReadBack = qcbReadBackOwn->isChecked();
 	s.bWhisperFriends = qcbWhisperFriends->isChecked();
 }
 
 void LogConfig::accept() const {
 	g.l->tts->setVolume(s.iTTSVolume);
+	g.mw->qteLog->document()->setMaximumBlockCount(s.iMaxLogBlocks);
 }
 
 bool LogConfig::expert(bool) {
@@ -194,26 +194,6 @@ Log::Log(QObject *p) : QObject(p) {
 	tts->setVolume(g.s.iTTSVolume);
 	uiLastId = 0;
 	qdDate = QDate::currentDate();
-
-#ifdef Q_OS_MAC
-	QStringList qslAllEvents;
-	for (int i = Log::firstMsgType; i <= Log::lastMsgType; ++i) {
-		Log::MsgType t = static_cast<Log::MsgType>(i);
-		qslAllEvents << QString("\"%1\"").arg(g.l->msgName(t));
-	}
-	QString qsGrowlEvents = QString("{%1}").arg(qslAllEvents.join(","));
-	QString qsScript = QString(
-	                       "tell application \"GrowlHelperApp\"\n"
-	                       "	set the allNotificationsList to %1\n"
-	                       "	set the enabledNotificationsList to %1\n"
-	                       "	register as application \"Mumble\""
-	                       "		all notifications allNotificationsList"
-	                       "		default notifications enabledNotificationsList"
-	                       "		icon of application \"Mumble\"\n"
-	                       "end tell\n").arg(qsGrowlEvents);
-	if (growl_available())
-		qt_mac_execute_apple_script(qsScript, NULL);
-#endif
 }
 
 const char *Log::msgNames[] = {
@@ -260,6 +240,11 @@ const QStringList Log::allowedSchemes() {
 	qslAllowedSchemeNames << QLatin1String("spotify");
 	qslAllowedSchemeNames << QLatin1String("steam");
 	qslAllowedSchemeNames << QLatin1String("irc");
+	qslAllowedSchemeNames << QLatin1String("gg"); // Gadu-Gadu http://gg.pl - Polish instant massager
+	qslAllowedSchemeNames << QLatin1String("mailto");
+	qslAllowedSchemeNames << QLatin1String("xmpp");
+	qslAllowedSchemeNames << QLatin1String("skype");
+
 	return qslAllowedSchemeNames;
 }
 
@@ -425,7 +410,7 @@ QString Log::validHtml(const QString &html, bool allowReplacement, QTextCursor *
 	}
 }
 
-void Log::log(MsgType mt, const QString &console, const QString &terse, bool console_only) {
+void Log::log(MsgType mt, const QString &console, const QString &terse, bool ownMessage) {
 	QDateTime dt = QDateTime::currentDateTime();
 
 	int ignore = qmIgnore.value(mt);
@@ -441,7 +426,12 @@ void Log::log(MsgType mt, const QString &console, const QString &terse, bool con
 
 	// Message output on console
 	if ((flags & Settings::LogConsole)) {
-		QTextCursor tc=g.mw->qteLog->textCursor();
+		QTextCursor tc = g.mw->qteLog->textCursor();
+
+		LogTextBrowser *tlog = g.mw->qteLog;
+		const int oldscrollvalue = tlog->getLogScroll();
+		const bool scroll = (oldscrollvalue == tlog->getLogScrollMaximum());
+
 		tc.movePosition(QTextCursor::End);
 
 		if (qdDate != dt.date()) {
@@ -464,95 +454,19 @@ void Log::log(MsgType mt, const QString &console, const QString &terse, bool con
 		validHtml(console, true, &tc);
 		tc.movePosition(QTextCursor::End);
 		g.mw->qteLog->setTextCursor(tc);
-		g.mw->qteLog->ensureCursorVisible();
+
+		if (scroll || ownMessage)
+			tlog->scrollLogToBottom();
+		else
+			tlog->setLogScroll(oldscrollvalue);
 	}
 
-	if (console_only)
+	if (!g.s.bTTSMessageReadBack && ownMessage)
 		return;
 
 	// Message notification with balloon tooltips
-	if ((flags & Settings::LogBalloon) && !(g.mw->isActiveWindow() && g.mw->qdwLog->isVisible()))  {
-		QString qsIcon;
-		switch (mt) {
-			case DebugInfo:
-			case CriticalError:
-				qsIcon=QLatin1String("gtk-dialog-error");
-				break;
-			case Warning:
-				qsIcon=QLatin1String("gtk-dialog-warning");
-				break;
-			case TextMessage:
-				qsIcon=QLatin1String("gtk-edit");
-				break;
-			default:
-				qsIcon=QLatin1String("gtk-dialog-info");
-				break;
-		}
-
-#ifdef USE_DBUS
-		QDBusMessage response;
-		QVariantMap hints;
-		hints.insert(QLatin1String("desktop-entry"), QLatin1String("mumble"));
-
-
-		{
-			QDBusInterface kde(QLatin1String("org.kde.VisualNotifications"), QLatin1String("/VisualNotifications"), QLatin1String("org.kde.VisualNotifications"));
-			if (kde.isValid()) {
-				QList<QVariant> args;
-				args.append(QLatin1String("mumble"));
-				args.append(uiLastId);
-				args.append(QString());
-				args.append(QLatin1String("mumble"));
-				args.append(msgName(mt));
-				args.append(console);
-				args.append(QStringList());
-				args.append(hints);
-				args.append(5000);
-
-				response = kde.callWithArgumentList(QDBus::AutoDetect, QLatin1String("Notify"), args);
-			}
-		}
-
-		if (response.type()!=QDBusMessage::ReplyMessage || response.arguments().at(0).toUInt()==0) {
-			QDBusInterface gnome(QLatin1String("org.freedesktop.Notifications"), QLatin1String("/org/freedesktop/Notifications"), QLatin1String("org.freedesktop.Notifications"));
-			if (gnome.isValid())
-				response = gnome.call(QLatin1String("Notify"), QLatin1String("Mumble"), uiLastId, qsIcon, msgName(mt), console, QStringList(), hints, -1);
-		}
-
-		if (response.type()==QDBusMessage::ReplyMessage && response.arguments().count() == 1) {
-			uiLastId = response.arguments().at(0).toUInt();
-		} else {
-#else
-		if (true) {
-#endif
-			if (g.mw->qstiIcon->isSystemTrayAvailable() && g.mw->qstiIcon->supportsMessages()) {
-				QSystemTrayIcon::MessageIcon msgIcon;
-
-				switch (mt) {
-					case DebugInfo:
-					case CriticalError:
-						msgIcon=QSystemTrayIcon::Critical;
-						break;
-					case Warning:
-						msgIcon=QSystemTrayIcon::Warning;
-						break;
-					default:
-						msgIcon=QSystemTrayIcon::Information;
-						break;
-				}
-
-				g.mw->qstiIcon->showMessage(msgName(mt), plain, msgIcon);
-			}
-		}
-#ifdef Q_OS_MAC
-		QString qsScript = QString(
-		                       "tell application \"GrowlHelperApp\"\n"
-		                       "	notify with name \"%1\" title \"%1\" description \"%2\" application name \"Mumble\"\n"
-		                       "end tell\n").arg(msgName(mt)).arg(plain);
-		if (growl_available())
-			qt_mac_execute_apple_script(qsScript, NULL);
-#endif
-	}
+	if ((flags & Settings::LogBalloon) && !(g.mw->isActiveWindow() && g.mw->qdwLog->isVisible()))
+		postNotification(mt, console, plain);
 
 	// Don't make any noise if we are self deafened
 	if (g.s.bDeaf)
@@ -610,6 +524,26 @@ void Log::log(MsgType mt, const QString &console, const QString &terse, bool con
 		tts->say(plain);
 	else if ((! terse.isEmpty()) && (terse.length() <= g.s.iTTSThreshold))
 		tts->say(terse);
+}
+
+// Post a notification using the MainWindow's QSystemTrayIcon.
+void Log::postQtNotification(MsgType mt, const QString &plain) {
+	if (g.mw->qstiIcon->isSystemTrayAvailable() && g.mw->qstiIcon->supportsMessages()) {
+		QSystemTrayIcon::MessageIcon msgIcon;
+		switch (mt) {
+			case DebugInfo:
+			case CriticalError:
+				msgIcon = QSystemTrayIcon::Critical;
+				break;
+			case Warning:
+				msgIcon = QSystemTrayIcon::Warning;
+				break;
+			default:
+				msgIcon = QSystemTrayIcon::Information;
+				break;
+		}
+		g.mw->qstiIcon->showMessage(msgName(mt), plain, msgIcon);
+	}
 }
 
 ValidDocument::ValidDocument(bool allowhttp, QObject *p) : QTextDocument(p) {

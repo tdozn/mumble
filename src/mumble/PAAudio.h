@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
    Copyright (C) 2007, Stefan Gehn <mETz AT gehn DOT net>
 
    All rights reserved.
@@ -29,8 +29,8 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _MUMBLE_PAAUDIO_H
-#define _MUMBLE_PAAUDIO_H
+#ifndef MUMBLE_PAAUDIO_H_
+#define MUMBLE_PAAUDIO_H_
 
 #include "AudioInput.h"
 #include "AudioOutput.h"

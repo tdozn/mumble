@@ -1,5 +1,5 @@
 
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -29,12 +29,17 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _CONFIGWIDGET_H
-#define _CONFIGWIDGET_H
+#ifndef CONFIGWIDGET_H_
+#define CONFIGWIDGET_H_
 
-#include "Settings.h"
+#include <QtCore/QObject>
+#include <QtGui/QWidget>
 
+struct Settings;
 class ConfigDialog;
+class QSlider;
+class QAbstractButton;
+class QComboBox;
 
 class ConfigWidget : public QWidget {
 	private:
@@ -73,7 +78,4 @@ class ConfigRegistrar {
 		~ConfigRegistrar();
 };
 
-#else
-class ConfigWidget;
-class ConfigRegistrar;
 #endif

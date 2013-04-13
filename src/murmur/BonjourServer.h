@@ -1,4 +1,4 @@
-/* Copyright (C) 2009, Stefan Hacker
+/* Copyright (C) 2009-2011, Stefan Hacker
 
    All rights reserved.
 
@@ -27,10 +27,13 @@
    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef _BONJOURSERVER_H
-#define _BONJOURSERVER_H
 
-#include "bonjourserviceregister.h"
+#ifndef BONJOURSERVER_H_
+#define BONJOURSERVER_H_
+
+#include <QtCore/QObject>
+
+class BonjourServiceRegister;
 
 class BonjourServer : public QObject {
 	private:
@@ -43,6 +46,4 @@ class BonjourServer : public QObject {
 		BonjourServiceRegister *bsrRegister;
 };
 
-#else
-class BonjourServer;
 #endif

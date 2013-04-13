@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2008-2009, Mikkel Krautz <mikkel@krautz.dk>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2008-2011, Mikkel Krautz <mikkel@krautz.dk>
 
    All rights reserved.
 
@@ -28,6 +28,8 @@
    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include "mumble_pch.hpp"
 
 #include "G15LCDEngine_helper.h"
 
@@ -121,7 +123,7 @@ void G15LCDEngineHelper::submitFrame(bool alert, unsigned char *buf, size_t len)
 
 /* -- */
 
-G15LCDDeviceHelper::G15LCDDeviceHelper(G15LCDEngineHelper *e) : LCDDevice() {
+G15LCDDeviceHelper::G15LCDDeviceHelper(G15LCDEngineHelper *e) : LCDDevice(), bEnabled(false) {
 	engine = e;
 }
 

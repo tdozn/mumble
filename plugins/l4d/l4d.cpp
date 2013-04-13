@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2012, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -71,18 +71,19 @@ static int trylock(const std::multimap<std::wstring, unsigned long long int> &pi
 	if (! initialize(pids, L"left4dead.exe", L"client.dll"))
 		return false;
 
-	posptr = pModule + 0x6F8340;
-	rotptr = pModule + 0x640A08;
+	posptr = pModule + 0x596E30;
+	rotptr = pModule + 0x596E3C;
 
 	float pos[3];
 	float rot[3];
-	float opos[3], top[3], front[3];
 
 	bool ok = peekProc(posptr, pos, 12) &&
 	          peekProc(rotptr, rot, 12);
 
-	if (ok)
+	if (ok) {
+		float opos[3], top[3], front[3];
 		return calcout(pos, rot, opos, top, front);
+	}
 
 	generic_unlock();
 
@@ -119,10 +120,10 @@ static int fetch(float *avatar_pos, float *avatar_front, float *avatar_top, floa
 }
 
 static const std::wstring longdesc() {
-	return std::wstring(L"Supports L4D version 4448 only. Supports no fancy stuff.");
+	return std::wstring(L"Supports L4D version 4440 only. Supports no fancy stuff.");
 }
 
-static std::wstring description(L"Left 4 Dead (Build 4448)");
+static std::wstring description(L"Left 4 Dead (Build 4440)");
 static std::wstring shortname(L"Left 4 Dead");
 
 static int trylock1() {

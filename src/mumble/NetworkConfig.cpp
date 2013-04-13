@@ -1,6 +1,6 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2008-2009, Mikkel Krautz <mikkel@krautz.dk>
-   Copyright (C) 2009, Stefan Hacker <dd0t@users.sourceforge.net>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2008-2011, Mikkel Krautz <mikkel@krautz.dk>
+   Copyright (C) 2009-2011, Stefan Hacker <dd0t@users.sourceforge.net>
 
    All rights reserved.
 
@@ -30,7 +30,10 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "NetworkConfig.h"
+
 #include "Global.h"
 #include "MainWindow.h"
 #include "OSInfo.h"
@@ -81,7 +84,7 @@ void NetworkConfig::load(const Settings &r) {
 	loadCheckBox(qcbImageDownload, r.iMaxImageSize <= 0);
 
 	loadCheckBox(qcbAutoUpdate, r.bUpdateCheck);
-	loadCheckBox(qcbPluginUpdate, r.bPluginOverlayCheck);
+	loadCheckBox(qcbPluginUpdate, r.bPluginCheck);
 	loadCheckBox(qcbUsage, r.bUsage);
 
 #if defined(SNAPSHOT_BUILD) && defined(QT_NO_DEBUG)
@@ -110,7 +113,7 @@ void NetworkConfig::save() const {
 	}
 
 	s.bUpdateCheck=qcbAutoUpdate->isChecked();
-	s.bPluginOverlayCheck=qcbPluginUpdate->isChecked();
+	s.bPluginCheck=qcbPluginUpdate->isChecked();
 	s.bUsage=qcbUsage->isChecked();
 }
 
@@ -192,8 +195,6 @@ QNetworkReply *Network::get(const QUrl &url) {
 }
 
 void Network::prepareRequest(QNetworkRequest &req) {
-#if QT_VERSION >= 0x040600
 	req.setAttribute(QNetworkRequest::HttpPipeliningAllowedAttribute, true);
-#endif
 	req.setRawHeader(QString::fromLatin1("User-Agent").toUtf8(), QString::fromLatin1("Mozilla/5.0 (%1; %2) Mumble/%3 %4").arg(OSInfo::getOS(), OSInfo::getOSVersion(), QLatin1String(MUMTEXT(MUMBLE_VERSION_STRING)), QLatin1String(MUMBLE_RELEASE)).toUtf8());
 }

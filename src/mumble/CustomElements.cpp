@@ -1,5 +1,5 @@
-/* Copyright (C) 2009, Stefan Hacker <dd0t@users.sourceforge.net>
-   Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2009-2011, Stefan Hacker <dd0t@users.sourceforge.net>
+   Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,39 @@
    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include "mumble_pch.hpp"
+
 #include "CustomElements.h"
+
 #include "ClientUser.h"
 #include "Global.h"
 #include "MainWindow.h"
+
+
+LogTextBrowser::LogTextBrowser(QWidget *p) : QTextBrowser(p) {}
+
+void LogTextBrowser::resizeEvent(QResizeEvent *e) {
+	scrollLogToBottom();
+	QTextBrowser::resizeEvent(e);
+}
+
+int LogTextBrowser::getLogScroll() {
+	return verticalScrollBar()->value();
+}
+
+int LogTextBrowser::getLogScrollMaximum() {
+	return verticalScrollBar()->maximum();
+}
+
+void LogTextBrowser::setLogScroll(int pos) {
+	verticalScrollBar()->setValue(pos);
+}
+
+void LogTextBrowser::scrollLogToBottom() {
+	verticalScrollBar()->setValue(verticalScrollBar()->maximum());
+}
+
 
 /*!
   \fn int ChatbarTextEdit::completeAtCursor()
@@ -76,7 +105,7 @@ void ChatbarTextEdit::inFocus(bool focus) {
 void ChatbarTextEdit::contextMenuEvent(QContextMenuEvent *qcme) {
 	QMenu *menu = createStandardContextMenu();
 
-	QAction *action = new QAction(tr("Paste and send") + QLatin1Char('\t'), menu);
+	QAction *action = new QAction(tr("Paste and &Send") + QLatin1Char('\t'), menu);
 	action->setEnabled(!QApplication::clipboard()->text().isEmpty());
 	connect(action, SIGNAL(triggered()), this, SLOT(pasteAndSend_triggered()));
 	if (menu->actions().count() > 6)
@@ -93,7 +122,7 @@ void ChatbarTextEdit::dropEvent(QDropEvent *evt) {
 	QTextEdit::dropEvent(evt);
 }
 
-ChatbarTextEdit::ChatbarTextEdit(QWidget *p) : QTextEdit(p) {
+ChatbarTextEdit::ChatbarTextEdit(QWidget *p) : QTextEdit(p), iHistoryIndex(-1) {
 	setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
 	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -150,7 +179,11 @@ bool ChatbarTextEdit::event(QEvent *evt) {
 	if (evt->type() == QEvent::KeyPress) {
 		QKeyEvent *kev = static_cast<QKeyEvent*>(evt);
 		if ((kev->key() == Qt::Key_Enter || kev->key() == Qt::Key_Return) && !(kev->modifiers() & Qt::ShiftModifier)) {
-			g.mw->sendChatbarMessage();
+			const QString msg = toPlainText();
+			if (!msg.isEmpty()) {
+				addToHistory(msg);
+				emit entered(msg);
+			}
 			return true;
 		}
 		if (kev->key() == Qt::Key_Tab) {
@@ -158,6 +191,12 @@ bool ChatbarTextEdit::event(QEvent *evt) {
 			return true;
 		} else if (kev->key() == Qt::Key_Space && kev->modifiers() == Qt::ControlModifier) {
 			emit ctrlSpacePressed();
+			return true;
+		} else if (kev->key() == Qt::Key_Up && kev->modifiers() == Qt::ControlModifier) {
+			historyUp();
+			return true;
+		} else if (kev->key() == Qt::Key_Down && kev->modifiers() == Qt::ControlModifier) {
+			historyDown();
 			return true;
 		}
 	}
@@ -231,9 +270,44 @@ unsigned int ChatbarTextEdit::completeAtCursor() {
 	return id;
 }
 
+void ChatbarTextEdit::addToHistory(const QString &str) {
+	iHistoryIndex = -1;
+	qslHistory.push_front(str);
+	if (qslHistory.length() > MAX_HISTORY) {
+		qslHistory.pop_back();
+	}
+}
+
+void ChatbarTextEdit::historyUp() {
+	if (qslHistory.length() == 0)
+		return;
+
+	if (iHistoryIndex == -1) {
+		qsHistoryTemp = toPlainText();
+	}
+
+	if (iHistoryIndex < qslHistory.length() - 1) {
+		setPlainText(qslHistory[++iHistoryIndex]);
+		moveCursor(QTextCursor::End);
+	}
+}
+
+void ChatbarTextEdit::historyDown() {
+	if (iHistoryIndex < 0) {
+		return;
+	} else if (iHistoryIndex == 0) {
+		setPlainText(qsHistoryTemp);
+		iHistoryIndex--;
+	} else {
+		setPlainText(qslHistory[--iHistoryIndex]);
+	}
+	moveCursor(QTextCursor::End);
+}
+
 void ChatbarTextEdit::pasteAndSend_triggered() {
 	paste();
-	g.mw->sendChatbarMessage();
+	addToHistory(toPlainText());
+	emit entered(toPlainText());
 }
 
 DockTitleBar::DockTitleBar() : QLabel(tr("Drag here")) {
@@ -255,6 +329,9 @@ QSize DockTitleBar::minimumSizeHint() const {
 
 bool DockTitleBar::eventFilter(QObject *, QEvent *evt) {
 	QDockWidget *qdw = qobject_cast<QDockWidget*>(parentWidget());
+
+	if (! this->isEnabled())
+		return false;
 
 	switch (evt->type()) {
 		case QEvent::Leave:

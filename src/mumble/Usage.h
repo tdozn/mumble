@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,12 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _USAGE_H
-#define _USAGE_H
+#ifndef USAGE_H_
+#define USAGE_H_
 
-#include "mumble_pch.hpp"
+#include <QtCore/QBuffer>
+#include <QtCore/QDataStream>
+#include <QtCore/QObject>
 
 class ClientUser;
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,9 +28,12 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "murmur_pch.h"
+
 #include "Tray.h"
-#include "Server.h"
+
 #include "Meta.h"
+#include "Server.h"
 #include "Version.h"
 
 Tray::Tray(QObject *p, LogEmitter *logger) : QObject(p) {

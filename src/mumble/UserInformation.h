@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,13 +28,20 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _USERINFORMATION_H
-#define _USERINFORMATION_H
+#ifndef USERINFORMATION_H_
+#define USERINFORMATION_H_
 
-#include "mumble_pch.hpp"
+#include <QtNetwork/QSslCertificate>
 
 #include "Message.h"
+
 #include "ui_UserInformation.h"
+
+namespace MumbleProto {
+class UserStats;
+}
+
+class QTimer;
 
 class UserInformation : public QDialog, Ui::UserInformation {
 	private:

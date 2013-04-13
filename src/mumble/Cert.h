@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,18 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _CERT_H
-#define _CERT_H
+#ifndef CERT_H_
+#define CERT_H_
+
+#include <QtCore/QString>
+#include <QtGui/QGroupBox>
+#include <QtNetwork/QHostInfo>
+#include <QtNetwork/QSslCertificate>
 
 #include "Settings.h"
+
+class QLabel;
+class QWidget;
 
 class CertView : public QGroupBox {
 	private:

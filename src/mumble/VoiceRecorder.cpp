@@ -1,6 +1,6 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2010, Benjamin Jemlich <pcgod@users.sourceforge.net>
-   Copyright (C) 2010, Stefan Hacker <dd0t@users.sourceforge.net>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2010-2011, Benjamin Jemlich <pcgod@users.sourceforge.net>
+   Copyright (C) 2010-2011, Stefan Hacker <dd0t@users.sourceforge.net>
 
    All rights reserved.
 
@@ -29,6 +29,8 @@
    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include "mumble_pch.hpp"
 
 #include "VoiceRecorder.h"
 
@@ -286,7 +288,7 @@ void VoiceRecorder::run() {
 
 #ifdef Q_OS_WIN
 				// This is needed for unicode filenames on Windows.
-				ri->sf = sf_wchar_open(filename.utf16(), SFM_WRITE, &sfinfo);
+				ri->sf = sf_wchar_open(filename.toStdWString().c_str(), SFM_WRITE, &sfinfo);
 #else
 				ri->sf = sf_open(qPrintable(filename), SFM_WRITE, &sfinfo);
 #endif
@@ -342,14 +344,14 @@ void VoiceRecorder::addBuffer(const ClientUser *cu, boost::shared_array<float> b
 	// Create a new RecordInfo object if this is a new user.
 	int index = bMixDown ? 0 : cu->uiSession;
 	if (!qhRecordInfo.contains(index)) {
-		boost::shared_ptr<RecordInfo> ri(new RecordInfo());
+		boost::shared_ptr<RecordInfo> ri = boost::make_shared<RecordInfo>();
 		qhRecordInfo.insert(index, ri);
 	}
 
 	{
 		// Save the buffer in |qlRecordBuffer|.
 		QMutexLocker l(&qmBufferLock);
-		boost::shared_ptr<RecordBuffer> rb(new RecordBuffer(cu, buffer, samples, tTimestamp->elapsed()));
+		boost::shared_ptr<RecordBuffer> rb = boost::make_shared<RecordBuffer>(cu, buffer, samples, tTimestamp->elapsed());
 		qlRecordBuffer << rb;
 	}
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -27,6 +27,8 @@
    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include "mumble_pch.hpp"
 
 #include "Overlay.h"
 #include "OverlayText.h"
@@ -105,7 +107,7 @@ bool OverlayClient::eventFilter(QObject *o, QEvent *e) {
 
 void OverlayClient::updateFPS() {
 	if (g.s.os.bFps) {
-		const BasepointPixmap &pm = OverlayTextLine(tr("FPS: %1").arg(iroundf(fFps + 0.5f)), g.s.os.qfFps).createPixmap(g.s.os.qcFps);
+		const BasepointPixmap &pm = OverlayTextLine(QString(QLatin1String("%1")).arg(iroundf(fFps + 0.5f)), g.s.os.qfFps).createPixmap(g.s.os.qcFps);
 		qgpiFPS->setPixmap(pm);
 		// offset to use basepoint
 		//TODO: settings are providing a top left anchor, so shift down by ascent
@@ -234,9 +236,7 @@ outer:
 
 					qgs.addItem(qgpw);
 					qgpw->show();
-#if QT_VERSION >= 0x040600
 					qgpw->setActive(true);
-#endif
 					goto outer;
 				}
 			}
@@ -377,14 +377,14 @@ void OverlayClient::scheduleDelete() {
 
 void OverlayClient::readyRead() {
 	while (1) {
-		int ready = qlsSocket->bytesAvailable();
+		unsigned int ready = qlsSocket->bytesAvailable();
 
 		if (omMsg.omh.iLength == -1) {
 			if (ready < sizeof(OverlayMsgHeader))
 				break;
 			else {
 				qlsSocket->read(omMsg.headerbuffer, sizeof(OverlayMsgHeader));
-				if ((omMsg.omh.uiMagic != OVERLAY_MAGIC_NUMBER) || (omMsg.omh.iLength < 0) || (omMsg.omh.iLength > sizeof(OverlayMsgShmem))) {
+				if ((omMsg.omh.uiMagic != OVERLAY_MAGIC_NUMBER) || (omMsg.omh.iLength < 0) || (omMsg.omh.iLength > static_cast<int>(sizeof(OverlayMsgShmem)))) {
 					disconnect();
 					return;
 				}
@@ -392,7 +392,7 @@ void OverlayClient::readyRead() {
 			}
 		}
 
-		if (ready >= omMsg.omh.iLength) {
+		if (ready >= static_cast<unsigned int>(omMsg.omh.iLength)) {
 			int length = qlsSocket->read(omMsg.msgbuffer, omMsg.omh.iLength);
 
 			if (length != omMsg.omh.iLength) {

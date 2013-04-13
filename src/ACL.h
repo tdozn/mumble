@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,11 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _ACL_H
-#define _ACL_H
+#ifndef ACL_H_
+#define ACL_H_
 
-#include "murmur_pch.h"
+#include <QtCore/QHash>
+#include <QtCore/QObject>
 
 class Channel;
 class User;
@@ -84,7 +85,8 @@ class ChanACL : public QObject {
 
 		ChanACL(Channel *c);
 #ifdef MURMUR
-		static bool hasPermission(ServerUser *p, Channel *c, QFlags<Perm> perm, ACLCache &cache);
+		static bool hasPermission(ServerUser *p, Channel *c, QFlags<Perm> perm, ACLCache *cache);
+		static QFlags<Perm> effectivePermissions(ServerUser *p, Channel *c, ACLCache *cache);
 #else
 		static QString whatsThis(Perm p);
 #endif
@@ -94,6 +96,4 @@ class ChanACL : public QObject {
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(ChanACL::Permissions)
 
-#else
-class ChanACL;
 #endif

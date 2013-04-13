@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,9 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _TOKENS_H
-#define _TOKENS_H
+#ifndef TOKENS_H_
+#define TOKENS_H_
 
-#include "mumble_pch.hpp"
 #include "ui_Tokens.h"
 
 class Tokens : public QDialog, public Ui::Tokens {

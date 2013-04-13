@@ -1,4 +1,4 @@
-/* Copyright (C) 2009, Mikkel Krautz <mikkel@krautz.dk>
+/* Copyright (C) 2009-2011, Mikkel Krautz <mikkel@krautz.dk>
 
    All rights reserved.
 
@@ -28,10 +28,13 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "CrashReporter.h"
+
 #include "Global.h"
-#include "OSInfo.h"
 #include "NetworkConfig.h"
+#include "OSInfo.h"
 
 CrashReporter::CrashReporter(QWidget *p) : QDialog(p) {
 	setWindowTitle(tr("Mumble Crash Report"));
@@ -105,15 +108,7 @@ void CrashReporter::uploadProgress(qint64 sent, qint64 total) {
 
 void CrashReporter::run() {
 	QByteArray qbaDumpContents;
-#ifdef COMPAT_CLIENT
-#ifdef Q_OS_MAC
-	QFile qfCrashDump(QDir::homePath() + QLatin1String("/Library/Preferences/Mumble/mumble11x.dmp"));
-#else
-	QFile qfCrashDump(QDesktopServices::storageLocation(QDesktopServices::DataLocation) + QLatin1String("/mumble11x.dmp"));
-#endif
-#else
 	QFile qfCrashDump(g.qdBasePath.filePath(QLatin1String("mumble.dmp")));
-#endif
 	if (! qfCrashDump.exists())
 		return;
 
@@ -142,11 +137,7 @@ void CrashReporter::run() {
 	}
 
 	QStringList qslFilters;
-#ifdef COMPAT_CLIENT
-	qslFilters << QString::fromLatin1("Mumble11x_*.crash");
-#else
 	qslFilters << QString::fromLatin1("Mumble_*.crash");
-#endif
 	qdCrashReports.setNameFilters(qslFilters);
 	qdCrashReports.setSorting(QDir::Time);
 	QFileInfoList qfilEntries = qdCrashReports.entryInfoList();

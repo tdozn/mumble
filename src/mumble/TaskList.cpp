@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2009, Benjamin Jemlich <pcgod@users.sourceforge.net>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2009-2011, Benjamin Jemlich <pcgod@users.sourceforge.net>
 
    All rights reserved.
 
@@ -29,11 +29,13 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
+#include "TaskList.h"
+
 #include <shobjidl.h>
 #include <propkey.h>
 #include <propvarutil.h>
-
-#include "TaskList.h"
 
 extern bool bIsWin7;
 
@@ -64,8 +66,8 @@ void TaskList::addToRecentList(QString name, QString user, QString host, int por
 	if (app.isEmpty() || ! QFileInfo(app).exists())
 		app = QCoreApplication::applicationFilePath();
 
-	link->SetPath(app.utf16());
-	link->SetArguments(QString::fromLatin1(url.toEncoded()).utf16());
+	link->SetPath(app.toStdWString().c_str());
+	link->SetArguments(QString::fromLatin1(url.toEncoded()).toStdWString().c_str());
 
 	hr = link->QueryInterface(__uuidof(IPropertyStore), reinterpret_cast<void **>(&ps));
 	if (FAILED(hr)) {
@@ -73,7 +75,7 @@ void TaskList::addToRecentList(QString name, QString user, QString host, int por
 		goto cleanup;
 	}
 
-	InitPropVariantFromString(name.utf16(), &pt);
+	InitPropVariantFromString(name.toStdWString().c_str(), &pt);
 	hr = ps->SetValue(PKEY_Title, pt);
 	PropVariantClear(&pt);
 

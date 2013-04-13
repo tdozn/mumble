@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,12 +28,11 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _ALSAAUDIO_H
-#define _ALSAAUDIO_H
+#ifndef ALSAAUDIO_H_
+#define ALSAAUDIO_H_
 
 #include "AudioInput.h"
 #include "AudioOutput.h"
-#include <alsa/asoundlib.h>
 
 class ALSAAudioOutput;
 class ALSAAudioInput;

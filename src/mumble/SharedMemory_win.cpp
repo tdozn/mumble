@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,13 +28,16 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
+#include "SharedMemory.h"
+
 #ifndef _WIN32_WINNT
 #define  _WIN32_WINNT 0x0501
 #include <windows.h>
 #endif
 
-#include <QDebug>
-#include "SharedMemory.h"
+#include <QtCore/QDebug>
 
 struct SharedMemory2Private {
 	HANDLE hMemory;
@@ -51,7 +54,7 @@ SharedMemory2::SharedMemory2(QObject *p, unsigned int minsize, const QString &me
 
 		for (int i=0;i<100;++i) {
 			qsName = QString::fromLatin1("Local\\MumbleOverlayMemory%1").arg(++uiIndex);
-			d->hMemory = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, minsize, qsName.utf16());
+			d->hMemory = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, minsize, qsName.toStdWString().c_str());
 			if (d->hMemory && GetLastError() != ERROR_ALREADY_EXISTS)
 				break;
 
@@ -63,7 +66,7 @@ SharedMemory2::SharedMemory2(QObject *p, unsigned int minsize, const QString &me
 		// Open existing segment
 
 		qsName = memname;
-		d->hMemory = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, minsize, qsName.utf16());
+		d->hMemory = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, minsize, qsName.toStdWString().c_str());
 		qWarning("%p %lx", d->hMemory, GetLastError());
 		if (GetLastError() != ERROR_ALREADY_EXISTS) {
 			qWarning() << "SharedMemory2: Memory doesn't exist" << qsName;

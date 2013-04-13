@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,15 +28,18 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _DATABASE_H
-#define _DATABASE_H
+#ifndef DATABASE_H_
+#define DATABASE_H_
 
-#include "murmur_pch.h"
+#include <QtCore/QVariant>
+
 #include "Timer.h"
 
 class Channel;
 class User;
 class Connection;
+class QSqlDatabase;
+class QSqlQuery;
 
 class ServerDB {
 	public:
@@ -59,6 +62,7 @@ class ServerDB {
 		static void setConf(int server_id, const QString &key, const QVariant &value = QVariant());
 		static QList<LogRecord> getLog(int server_id, unsigned int offs_min, unsigned int offs_max);
 		static int getLogLen(int server_id);
+		static void wipeLogs();
 		static bool prepare(QSqlQuery &, const QString &, bool fatal = true, bool warn = true);
 		static bool exec(QSqlQuery &, const QString &str = QString(), bool fatal= true, bool warn = true);
 		static bool execBatch(QSqlQuery &, const QString &str = QString(), bool fatal= true);

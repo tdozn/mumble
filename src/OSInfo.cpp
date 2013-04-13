@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,8 +28,7 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "OSInfo.h"
-#include "Version.h"
+#include "murmur_pch.h"
 
 #ifdef Q_WS_WIN
 #include <intrin.h>
@@ -44,6 +43,9 @@
 #include <sys/sysctl.h>
 #include <mach-o/arch.h>
 #endif
+
+#include "OSInfo.h"
+#include "Version.h"
 
 QString OSInfo::getMacHash(const QList<QHostAddress> &qlBind) {
 	QString first, second, third;

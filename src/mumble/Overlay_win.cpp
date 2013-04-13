@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,27 +28,20 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "User.h"
 #include "Channel.h"
 #include "Overlay.h"
 #include "MainWindow.h"
 #include "Global.h"
 
-typedef void (__cdecl *HooksProc)();
 typedef unsigned int (__cdecl *GetOverlayMagicVersionProc)();
 typedef void (__cdecl *PrepProc)();
 typedef void (__cdecl *PrepDXGIProc)();
 
-class OverlayPrivateWin : public OverlayPrivate {
-	protected:
-		QLibrary *qlOverlay;
-	public:
-		HooksProc hpInstall, hpRemove;
-
-		void setActive(bool);
-		OverlayPrivateWin(QObject *);
-		~OverlayPrivateWin();
-};
+// Used by the overlay to detect whether we injected into ourselve
+extern "C" __declspec(dllexport) void mumbleSelfDetection() {};
 
 OverlayPrivateWin::OverlayPrivateWin(QObject *p) : OverlayPrivate(p) {
 	QString path=QString::fromLatin1("%1/mumble_ol.dll").arg(qApp->applicationDirPath());
@@ -122,15 +115,4 @@ bool OverlayConfig::installFiles() {
 
 bool OverlayConfig::uninstallFiles() {
 	return false;
-}
-
-bool OverlayConfig::supportsCertificates() {
-	return false;
-}
-
-bool OverlayConfig::installerIsValid() {
-	return false;
-}
-
-void OverlayConfig::showCertificates() {
 }

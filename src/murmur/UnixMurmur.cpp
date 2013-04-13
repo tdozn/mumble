@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -29,14 +29,16 @@
 */
 
 #include "murmur_pch.h"
+
 #include "UnixMurmur.h"
+
 #include "Meta.h"
 
 QMutex *LimitTest::qm;
 QWaitCondition *LimitTest::qw;
 QWaitCondition *LimitTest::qstartw;
 
-LimitTest::LimitTest() : QThread() {
+LimitTest::LimitTest() : QThread(), tid(-1) {
 }
 
 void LimitTest::run() {
@@ -161,12 +163,14 @@ UnixMurmur::~UnixMurmur() {
 
 void UnixMurmur::hupSignalHandler(int) {
 	char a = 1;
-	::write(iHupFd[0], &a, sizeof(a));
+	ssize_t len = ::write(iHupFd[0], &a, sizeof(a));
+	Q_UNUSED(len);
 }
 
 void UnixMurmur::termSignalHandler(int) {
 	char a = 1;
-	::write(iTermFd[0], &a, sizeof(a));
+	ssize_t len = ::write(iTermFd[0], &a, sizeof(a));
+	Q_UNUSED(len);
 }
 
 
@@ -175,25 +179,29 @@ void UnixMurmur::termSignalHandler(int) {
 void UnixMurmur::handleSigHup() {
 	qsnHup->setEnabled(false);
 	char tmp;
-	::read(iHupFd[1], &tmp, sizeof(tmp));
+	ssize_t len = ::read(iHupFd[1], &tmp, sizeof(tmp));
+	Q_UNUSED(len);
 
-	if (! qfLog || ! qfLog->isOpen()) {
-		if (qfLog) {
-			qWarning("Caught SIGHUP, but logfile not in use -- interpreting as hint to quit");
-			QCoreApplication::instance()->quit();
-		} else {
-			qWarning("Caught SIGHUP, but logfile not in use");
-		}
+	if (! qfLog) {
+		qWarning("Caught SIGHUP, but logfile not in use");
+	} else if (! qfLog->isOpen()) {
+		qWarning("Caught SIGHUP, but logfile not in use -- interpreting as hint to quit");
+		QCoreApplication::instance()->quit();
 	} else {
 		qWarning("Caught SIGHUP, will reopen %s", qPrintable(Meta::mp.qsLogfile));
-		qfLog->close();
-		qfLog->setFileName(Meta::mp.qsLogfile);
-		bool result = qfLog->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
+
+		QFile *newlog = new QFile(Meta::mp.qsLogfile);
+		bool result = newlog->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
 		if (! result) {
-			delete qfLog;
-			qfLog = NULL;
+			delete newlog;
+			qCritical("Failed to reopen logfile for writing, keeping old log");
 		} else {
-			qfLog->setTextModeEnabled(true);
+			QFile *oldlog = qfLog;
+
+			newlog->setTextModeEnabled(true);
+			qfLog = newlog;
+			oldlog->close();
+			delete oldlog;
 			qWarning("Log rotated successfully");
 		}
 	}
@@ -203,7 +211,8 @@ void UnixMurmur::handleSigHup() {
 void UnixMurmur::handleSigTerm() {
 	qsnTerm->setEnabled(false);
 	char tmp;
-	::read(iTermFd[1], &tmp, sizeof(tmp));
+	ssize_t len = ::read(iTermFd[1], &tmp, sizeof(tmp));
+	Q_UNUSED(len);
 
 	qCritical("Caught SIGTERM, exiting");
 
@@ -231,13 +240,21 @@ void UnixMurmur::setuid() {
 		} else
 			qFatal("Couldn't switch uid/gid.");
 #else
-		if (setregid(Meta::mp.uiGid, Meta::mp.uiGid) != 0)
+		if (::initgroups(qPrintable(Meta::mp.qsName), Meta::mp.uiGid) != 0)
+			qCritical("Can't initialize supplementary groups");
+		if (::setgid(Meta::mp.uiGid) != 0)
 			qCritical("Failed to switch to gid %d", Meta::mp.uiGid);
-		if (setresuid(Meta::mp.uiUid, Meta::mp.uiUid, 0) != 0) {
+		if (::setuid(Meta::mp.uiUid) != 0) {
 			qFatal("Failed to become uid %d", Meta::mp.uiUid);
 		} else {
 			qCritical("Successfully switched to uid %d", Meta::mp.uiUid);
 			initialcap();
+		}
+		if (!Meta::mp.qsHome.isEmpty()) {
+			// QDir::homePath is broken. It only looks at $HOME
+			// instead of getpwuid() so we have to set our home
+			// ourselves
+			::setenv("HOME", qPrintable(Meta::mp.qsHome), 1);
 		}
 #endif
 	} else if (bRoot) {
@@ -247,7 +264,7 @@ void UnixMurmur::setuid() {
 
 void UnixMurmur::initialcap() {
 #ifdef Q_OS_LINUX
-	cap_value_t caps[] = {CAP_NET_ADMIN, CAP_SETUID, CAP_SETGID, CAP_SYS_RESOURCE, CAP_DAC_OVERRIDE };
+	cap_value_t caps[] = {CAP_NET_ADMIN, CAP_SETUID, CAP_SETGID, CAP_CHOWN, CAP_SYS_RESOURCE, CAP_DAC_OVERRIDE };
 
 	if (! bRoot)
 		return;
@@ -273,7 +290,7 @@ void UnixMurmur::initialcap() {
 
 void UnixMurmur::finalcap() {
 #ifdef Q_OS_LINUX
-	cap_value_t caps[] = {CAP_NET_ADMIN, CAP_SYS_RESOURCE};
+	cap_value_t caps[] = {CAP_SYS_RESOURCE};
 	struct rlimit r;
 
 	if (! bRoot)
@@ -302,4 +319,30 @@ void UnixMurmur::finalcap() {
 	}
 	cap_free(c);
 #endif
+}
+
+const QString UnixMurmur::trySystemIniFiles(const QString& fname) {
+	QString file = fname;
+	if (!file.isEmpty())
+		return file;
+#if defined(Q_OS_LINUX)
+	if (!bRoot)
+		return file;
+
+	QStringList inipaths;
+
+	inipaths << QLatin1String("/usr/local/etc/mumble-server.ini");
+	inipaths << QLatin1String("/usr/local/etc/murmur.ini");
+	inipaths << QLatin1String("/etc/mumble-server.ini");
+	inipaths << QLatin1String("/etc/murmur.ini");
+
+	foreach(const QString &f, inipaths) {
+		QFileInfo fi(f);
+		if (fi.exists() && fi.isReadable()) {
+			file = fi.absoluteFilePath();
+			break;
+		}
+	}
+#endif
+	return file;
 }

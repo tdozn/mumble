@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -43,12 +43,12 @@
 #include <string>
 #include "overlay.h"
 #include "HardHook.h"
+#include "ods.h"
 
 #define lround(x) static_cast<long int>((x) + (((x) >= 0.0) ? 0.5 : -0.5))
 
 using namespace std;
 
-void __cdecl fods(const char *format, ...);
 void __cdecl ods(const char *format, ...);
 
 struct Direct3D9Data {
@@ -121,6 +121,7 @@ extern void checkOpenGLHook();
 extern Direct3D9Data *d3dd;
 extern DXGIData *dxgi;
 extern HMODULE hSelf;
+extern BOOL bIsWin8;
 extern unsigned int uiAudioCount;
 extern bool bVideoHooked;
 

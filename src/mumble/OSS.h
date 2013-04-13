@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,8 +28,8 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _OSS_H
-#define _OSS_H
+#ifndef OSS_H_
+#define OSS_H_
 
 #include "AudioInput.h"
 #include "AudioOutput.h"
@@ -57,5 +57,4 @@ class OSSOutput : public AudioOutput {
 		void run();
 };
 
-#else
 #endif

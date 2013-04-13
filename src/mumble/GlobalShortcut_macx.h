@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2008-2009, Mikkel Krautz <mikkel@krautz.dk>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2008-2011, Mikkel Krautz <mikkel@krautz.dk>
 
    All rights reserved.
 
@@ -30,22 +30,12 @@
 */
 
 #include <stdlib.h>
+#include <QtCore/QObject>
+
+#include <ApplicationServices/ApplicationServices.h>
+
 #include "GlobalShortcut.h"
 #include "Global.h"
-
-class GlobalShortcutMacInit : public QObject, public DeferInit {
-	private:
-		Q_OBJECT
-		Q_DISABLE_COPY(GlobalShortcutMacInit)
-	public:
-		GlobalShortcutMacInit();
-		void initialize();
-	public slots:
-		void openPrefsPane(const QString &) const;
-	protected:
-		bool accessibilityApiEnabled() const;
-		void accessibilityDialog() const;
-};
 
 class GlobalShortcutMac : public GlobalShortcutEngine {
 	private:
@@ -55,14 +45,17 @@ class GlobalShortcutMac : public GlobalShortcutEngine {
 		GlobalShortcutMac();
 		~GlobalShortcutMac();
 		QString buttonName(const QVariant &);
+		void dumpEventTaps();
 		void needRemap();
 		bool handleModButton(CGEventFlags newmask);
 		virtual bool canSuppress();
 
-#ifndef COMPAT_CLIENT
+    virtual void setEnabled(bool);
+    virtual bool enabled();
+    virtual bool canDisable();
+
 	public slots:
 		void forwardEvent(void *evt);
-#endif
 
 	protected:
 		CFRunLoopRef loop;

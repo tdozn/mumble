@@ -1,12 +1,13 @@
 include(../mumble.pri)
 
-TEMPLATE	=app
-CONFIG *= qt thread warn_on network xml qtestlib sql debug
-QT *= xml sql network
-LANGUAGE	= C++
+TEMPLATE = app
+CONFIG *= qt thread warn_on network qtestlib debug
+CONFIG -= app_bundle
+QT *= network xml
+LANGUAGE = C++
 TARGET = Benchmark
 SOURCES *= Benchmark.cpp Timer.cpp CryptState.cpp
-HEADERS *= Timer.h
+HEADERS *= Timer.h CryptState.h
 VPATH *= ..
 INCLUDEPATH *= .. ../murmur ../mumble
 !win32 {

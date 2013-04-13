@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2008-2009, Mikkel Krautz <mikkel@krautz.dk>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2008-2011, Mikkel Krautz <mikkel@krautz.dk>
 
    All rights reserved.
 
@@ -29,11 +29,12 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _LCD_H
-#define _LCD_H
+#ifndef LCD_H_
+#define LCD_H_
 
 #include "ConfigDialog.h"
 #include "Timer.h"
+
 #include "ui_LCD.h"
 
 class User;
@@ -120,10 +121,4 @@ class LCD : public QObject {
 
 uint qHash(const QSize &size);
 
-#else
-class LCDConfig;
-class LCDDevice;
-class LCDEngine;
-class LCDEngineRegistrar;
-class LCD;
 #endif

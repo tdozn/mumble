@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,6 +28,8 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "murmur_pch.h"
+
 #include "ACL.h"
 #include "Channel.h"
 #include "Group.h"
@@ -56,36 +58,34 @@ ChanACL::ChanACL(Channel *chan) : QObject(chan) {
 
 #ifdef MURMUR
 
-bool ChanACL::hasPermission(ServerUser *p, Channel *chan, QFlags<Perm> perm, ACLCache &cache) {
-	QStack<Channel *> chanstack;
-	Channel *ch;
-	ChanACL *acl;
+bool ChanACL::hasPermission(ServerUser *p, Channel *chan, QFlags<Perm> perm, ACLCache *cache) {
+	Permissions granted = effectivePermissions(p, chan, cache);
 
+	return ((granted & perm) != None);
+}
+
+// Return effective permissions.
+QFlags<ChanACL::Perm> ChanACL::effectivePermissions(ServerUser *p, Channel *chan, ACLCache *cache) {
 	// Superuser
 	if (p->iId == 0) {
-		switch (perm) {
-			case Speak:
-			case Whisper:
-				return false;
-			default:
-				return true;
-		}
+		return static_cast<Permissions>(All &~ (Speak|Whisper));
 	}
 
 	Permissions granted = 0;
 
-	QHash<Channel *, Permissions> *h = cache.value(p);
-	if (h)
-		granted = h->value(chan);
-
-	if (granted & Cached) {
-		if ((perm != Speak) && (perm != Whisper))
-			return ((granted & (perm | Write)) != None);
-		else
-			return ((granted & perm) != None);
+	if (cache) {
+		QHash<Channel *, Permissions> *h = cache->value(p);
+		if (h)
+			granted = h->value(chan);
 	}
 
-	ch = chan;
+	if (granted & Cached) {
+		return granted;
+	}
+
+	QStack<Channel *> chanstack;
+	Channel *ch = chan;
+
 	while (ch) {
 		chanstack.push(ch);
 		ch = ch->cParent;
@@ -98,6 +98,7 @@ bool ChanACL::hasPermission(ServerUser *p, Channel *chan, QFlags<Perm> perm, ACL
 
 	bool traverse = true;
 	bool write = false;
+	ChanACL *acl;
 
 	while (! chanstack.isEmpty()) {
 		ch = chanstack.pop();
@@ -116,8 +117,18 @@ bool ChanACL::hasPermission(ServerUser *p, Channel *chan, QFlags<Perm> perm, ACL
 					write = true;
 				if (acl->pDeny & Write)
 					write = false;
+				if (ch->iId == 0 && chan == ch && acl->bApplyHere) {
+					if (acl->pAllow & Kick)
+						granted |= Kick;
+					if (acl->pAllow & Ban)
+						granted |= Ban;
+					if (acl->pAllow & Register)
+						granted |= Register;
+					if (acl->pAllow & SelfRegister)
+						granted |= SelfRegister;
+				}
 				if ((ch==chan && acl->bApplyHere) || (ch!=chan && acl->bApplySubs)) {
-					granted |= acl->pAllow;
+					granted |= (acl->pAllow & ~(Kick|Ban|Register|SelfRegister|Cached));
 					granted &= ~acl->pDeny;
 				}
 			}
@@ -128,15 +139,20 @@ bool ChanACL::hasPermission(ServerUser *p, Channel *chan, QFlags<Perm> perm, ACL
 		}
 	}
 
-	if (! cache.contains(p))
-		cache.insert(p, new QHash<Channel *, Permissions>);
+	if (granted & Write) {
+		granted |= Traverse|Enter|MuteDeafen|Move|MakeChannel|LinkChannel|TextMessage|MakeTempChannel;
+		if (chan->iId == 0)
+			granted |= Kick|Ban|Register|SelfRegister;
+	}
 
-	cache.value(p)->insert(chan, granted | Cached);
+	if (cache) {
+		if (! cache->contains(p))
+			cache->insert(p, new QHash<Channel *, Permissions>);
 
-	if ((perm != Speak) && (perm != Whisper))
-		return ((granted & (perm | Write)) != None);
-	else
-		return ((granted & perm) != None);
+		cache->value(p)->insert(chan, granted | Cached);
+	}
+
+	return granted;
 }
 
 #else

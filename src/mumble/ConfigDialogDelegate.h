@@ -1,4 +1,4 @@
-/* Copyright (C) 2009, Mikkel Krautz <mikkel@krautz.dk>
+/* Copyright (C) 2009-2011, Mikkel Krautz <mikkel@krautz.dk>
 
    All rights reserved.
 
@@ -37,24 +37,10 @@
 
 @class NSToolbarItem;
 
-@interface ConfigDialogDelegate : NSObject {
-    ConfigDialogMac *configDialog;
-    QMap<unsigned int, ConfigWidget *> *widgetMap;
-
-    BOOL inExpertMode;
-    NSMutableDictionary *nameWidgetMapping;
-    NSMutableArray *identifiers;
-    NSToolbar *toolbarCache;
-}
-
-- (id) initWithConfigDialog:
-(ConfigDialogMac *)dialog andWidgetMap:
-(QMap<unsigned int, ConfigWidget *> *) map inExpertMode:
-(BOOL)flag;
-- (void) selectItem:
-(ConfigWidget *)cw;
+@interface ConfigDialogDelegate : NSObject
+- (id) initWithConfigDialog:(ConfigDialogMac *)dialog andWidgetMap:(QMap<unsigned int, ConfigWidget *> *) map inExpertMode:(BOOL)flag;
+- (void) selectItem:(ConfigWidget *)cw;
 - (BOOL) expertMode;
-
 @end
 
 #endif /* _CONFIGDIALOG_DELEGATE */

@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,8 +28,10 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _CLIENTUSER_H
-#define _CLIENTUSER_H
+#ifndef CLIENTUSER_H_
+#define CLIENTUSER_H_
+
+#include <QtCore/QReadWriteLock>
 
 #include "User.h"
 #include "Timer.h"
@@ -47,6 +49,8 @@ class ClientUser : public QObject, public User {
 		};
 
 		Settings::TalkState tsState;
+		Timer tLastTalkStateChange;
+		bool bLocalIgnore;
 		bool bLocalMute;
 
 		float fPowerMin, fPowerMax;
@@ -66,17 +70,23 @@ class ClientUser : public QObject, public User {
 		QString getFlagsString() const;
 		ClientUser(QObject *p = NULL);
 
+		/*! Determines whether a user is active or not
+		 * A user is active when it is currently speaking or when the user has
+		 * spoken within Settings::uiActiveTime amount of seconds.
+		 */
+		bool isActive();
+
 		static QHash<unsigned int, ClientUser *> c_qmUsers;
 		static QReadWriteLock c_qrwlUsers;
 
 		static QList<ClientUser *> c_qlTalking;
 		static QReadWriteLock c_qrwlTalking;
 		static QList<ClientUser *> getTalking();
+		static QList<ClientUser *> getActive();
 
 		static void sortUsersOverlay(QList<ClientUser *> &list);
 
 		static ClientUser *get(unsigned int);
-		static ClientUser *getByHash(const QString &hash);
 		static bool isValid(unsigned int);
 		static ClientUser *add(unsigned int, QObject *p = NULL);
 		static ClientUser *match(const ClientUser *p, bool matchname = false);
@@ -89,6 +99,7 @@ class ClientUser : public QObject, public User {
 		void setMute(bool mute);
 		void setDeaf(bool deaf);
 		void setSuppress(bool suppress);
+		void setLocalIgnore(bool ignore);
 		void setLocalMute(bool mute);
 		void setSelfMute(bool mute);
 		void setSelfDeaf(bool deaf);

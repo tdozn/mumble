@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
 All rights reserved.
 
@@ -28,10 +28,12 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _VERSIONCHECK_H
-#define _VERSIONCHECK_H
+#ifndef VERSIONCHECK_H_
+#define VERSIONCHECK_H_
 
-#include "mumble_pch.hpp"
+#include <QtCore/QObject>
+#include <QtCore/QByteArray>
+#include <QtCore/QUrl>
 
 class VersionCheck : public QObject {
 	private:
@@ -40,11 +42,9 @@ class VersionCheck : public QObject {
 	protected:
 		bool bSilent;
 	public slots:
-		void finished();
+		void fetched(QByteArray data, QUrl url);
 	public:
 		VersionCheck(bool autocheck, QObject *parent = NULL, bool focus = false);
 };
 
-#else
-class VersionCheck;
 #endif

@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -369,8 +369,8 @@ static BOOL __stdcall mywglSwapLayerBuffers(HDC hdc, UINT fuPlanes) {
 
 void checkOpenGLHook() {
 	if (bChaining) {
-		return;
 		ods("Causing a chain");
+		return;
 	}
 
 	bChaining = true;

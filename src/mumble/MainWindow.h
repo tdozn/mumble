@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2009, Stefan Hacker <dd0t@users.sourceforge.net>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2009-2011, Stefan Hacker <dd0t@users.sourceforge.net>
 
    All rights reserved.
 
@@ -29,10 +29,19 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _MAINWINDOW_H
-#define _MAINWINDOW_H
+#ifndef MAINWINDOW_H_
+#define MAINWINDOW_H_
 
-#include "mumble_pch.hpp"
+#include <QtGui/QMainWindow>
+#include <QtGui/QSystemTrayIcon>
+#include <QtNetwork/QAbstractSocket>
+
+#include "CustomElements.h"
+#include "Message.h"
+#include "Mumble.pb.h"
+#include "Usage.h"
+
+#include "ui_MainWindow.h"
 
 #define MB_QEVENT (QEvent::User + 939)
 #define OU_QEVENT (QEvent::User + 940)
@@ -48,13 +57,9 @@ class Tokens;
 class Channel;
 class UserInformation;
 class VoiceRecorderDialog;
+class PTTButtonWidget;
 
 struct ShortcutTarget;
-
-#include "Message.h"
-#include "Usage.h"
-#include "ui_MainWindow.h"
-#include "CustomElements.h"
 
 class MessageBoxEvent : public QEvent {
 	public:
@@ -84,7 +89,7 @@ class MainWindow : public QMainWindow, public MessageHandler, public Ui::MainWin
 
 		GlobalShortcut *gsPushTalk, *gsResetAudio, *gsMuteSelf, *gsDeafSelf;
 		GlobalShortcut *gsUnlink, *gsPushMute, *gsMetaChannel, *gsToggleOverlay;
-		GlobalShortcut *gsMinimal, *gsVolumeUp, *gsVolumeDown, *gsWhisper;
+		GlobalShortcut *gsMinimal, *gsVolumeUp, *gsVolumeDown, *gsWhisper, *gsMetaLink;
 		DockTitleBar *dtbLogDockTitle, *dtbChatDockTitle;
 
 		ACLEditor *aclEdit;
@@ -100,23 +105,19 @@ class MainWindow : public QMainWindow, public MessageHandler, public Ui::MainWin
 		bool bSuppressAskOnQuit;
 		bool bAutoUnmute;
 
-#if QT_VERSION >= 0x040600
 		QWeakPointer<Channel> cContextChannel;
 		QWeakPointer<ClientUser> cuContextUser;
-#else
-		QPointer<Channel> cContextChannel;
-		QPointer<ClientUser> cuContextUser;
-#endif
 		QPoint qpContextPosition;
 
 		void recheckTTS();
 		void msgBox(QString msg);
 		void setOnTop(bool top);
+		void setShowDockTitleBars(bool doShow);
 		void updateTrayIcon();
 		QPair<QByteArray, QImage> openImageFile();
-		void sendChatbarMessage();
 		static const QString defaultStyleSheet;
 
+		void updateChatBar();
 		void openTextMessageDialog(ClientUser *p);
 
 #ifdef Q_OS_WIN
@@ -139,14 +140,16 @@ class MainWindow : public QMainWindow, public MessageHandler, public Ui::MainWin
 		int iTargetCounter;
 		QMap<unsigned int, UserInformation *> qmUserInformations;
 
+		PTTButtonWidget *qwPTTButtonWidget;
+
 		void createActions();
 		void setupGui();
 		void customEvent(QEvent *evt);
 		void findDesiredChannel();
 		void setupView(bool toggle_minimize = true);
-		bool launchCompatibilityClient(const QUrl &url);
 		virtual void closeEvent(QCloseEvent *e);
 		virtual void hideEvent(QHideEvent *e);
+		virtual void showEvent(QShowEvent *e);
 
 		bool handleSpecialContextMenu(const QUrl &url, const QPoint &pos_, bool focus = false);
 		Channel* getContextMenuChannel();
@@ -174,6 +177,7 @@ class MainWindow : public QMainWindow, public MessageHandler, public Ui::MainWin
 		void on_qaUserDeaf_triggered();
 		void on_qaSelfPrioritySpeaker_triggered();
 		void on_qaUserPrioritySpeaker_triggered();
+		void on_qaUserLocalIgnore_triggered();
 		void on_qaUserLocalMute_triggered();
 		void on_qaUserTextMessage_triggered();
 		void on_qaUserRegister_triggered();
@@ -190,6 +194,7 @@ class MainWindow : public QMainWindow, public MessageHandler, public Ui::MainWin
 		void on_qaChannelUnlink_triggered();
 		void on_qaChannelUnlinkAll_triggered();
 		void on_qaChannelSendMessage_triggered();
+		void on_qaChannelCopyURL_triggered();
 		void on_qaAudioReset_triggered();
 		void on_qaAudioMute_triggered();
 		void on_qaAudioDeaf_triggered();
@@ -205,7 +210,6 @@ class MainWindow : public QMainWindow, public MessageHandler, public Ui::MainWin
 		void on_qaAudioWizard_triggered();
 		void on_qaHelpWhatsThis_triggered();
 		void on_qaHelpAbout_triggered();
-		void on_qaHelpAboutSpeex_triggered();
 		void on_qaHelpAboutQt_triggered();
 		void on_qaHelpVersionCheck_triggered();
 		void on_qaQuit_triggered();
@@ -225,6 +229,7 @@ class MainWindow : public QMainWindow, public MessageHandler, public Ui::MainWin
 		void on_gsDeafSelf_down(QVariant);
 		void on_gsWhisper_triggered(bool, QVariant);
 		void on_Reconnect_timeout();
+		void on_Icon_messageClicked();
 		void on_Icon_activated(QSystemTrayIcon::ActivationReason);
 		void voiceRecorderDialog_finished(int);
 		void qtvUserCurrentChanged(const QModelIndex &, const QModelIndex &);
@@ -238,6 +243,10 @@ class MainWindow : public QMainWindow, public MessageHandler, public Ui::MainWin
 		void talkingChanged();
 		void destroyUserInformation();
 		void trayAboutToShow();
+		void sendChatbarMessage(QString msg);
+		void pttReleased();
+		void whisperReleased(QVariant scdata);
+		void onResetAudio();
 	public:
 		MainWindow(QWidget *parent);
 		~MainWindow();
@@ -246,8 +255,7 @@ class MainWindow : public QMainWindow, public MessageHandler, public Ui::MainWin
 #define MUMBLE_MH_MSG(x) void msg##x(const MumbleProto:: x &);
 		MUMBLE_MH_ALL
 #undef MUMBLE_MH_MSG
+		void removeContextAction(const MumbleProto::ContextActionModify &msg);
 };
 
-#else
-class MainWindow;
 #endif

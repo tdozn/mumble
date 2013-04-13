@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,8 +28,8 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _DIRECTSOUND_H
-#define _DIRECTSOUND_H
+#ifndef DIRECTSOUND_H_
+#define DIRECTSOUND_H_
 
 #include "AudioInput.h"
 #include "AudioOutput.h"
@@ -59,7 +59,4 @@ class DXAudioInput : public AudioInput {
 		void run();
 };
 
-#else
-class DXAudioOutput;
-class DXAudioInput;
 #endif

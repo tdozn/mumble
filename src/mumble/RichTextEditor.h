@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,10 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _RICHTEXTEDITOR_H
-#define _RICHTEXTEDITOR_H
+#ifndef RICHTEXTEDITOR_H_
+#define RICHTEXTEDITOR_H_
 
-#include "mumble_pch.hpp"
+#include <QtGui/QTextEdit>
 
 class RichTextHtmlEdit : public QTextEdit {
 	private:

@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,11 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _USERVIEW_H
-#define _USERVIEW_H
+#ifndef USERVIEW_H_
+#define USERVIEW_H_
 
-#include "mumble_pch.hpp"
+#include <QtGui/QStyledItemDelegate>
+#include <QtGui/QTreeView>
 
 #include "Timer.h"
 
@@ -68,6 +69,4 @@ class UserView : public QTreeView {
 
 };
 
-#else
-class UserView;
 #endif

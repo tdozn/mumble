@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,13 +28,16 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _AUDIOWIZARD_H
-#define _AUDIOWIZARD_H
+#ifndef AUDIOWIZARD_H_
+#define AUDIOWIZARD_H_
 
-#include "Settings.h"
+#include <QtGui/QWizard>
+#include <QtGui/QWizardPage>
+
 #include "AudioStats.h"
 #include "AudioOutput.h"
 #include "GlobalShortcut.h"
+#include "Settings.h"
 
 class CompletablePage : public QWizardPage {
 		Q_OBJECT

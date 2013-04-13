@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2009-2010, Mikkel Krautz <mikkel@krautz.dk>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2009-2011, Mikkel Krautz <mikkel@krautz.dk>
 
    All rights reserved.
 
@@ -29,7 +29,10 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "CoreAudio.h"
+
 #include "User.h"
 #include "Global.h"
 
@@ -55,6 +58,7 @@ class CoreAudioInit : public DeferInit {
 		CoreAudioInputRegistrar *cairReg;
 		CoreAudioOutputRegistrar *caorReg;
 	public:
+		CoreAudioInit() : cairReg(NULL), caorReg(NULL) {}
 		void initialize();
 		void destroy();
 };

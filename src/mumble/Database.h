@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,9 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _DATABASE_H
-#define _DATABASE_H
+#ifndef DATABASE_H_
+#define DATABASE_H_
 
-#include "mumble_pch.hpp"
 #include "Settings.h"
 
 struct FavoriteServer {
@@ -54,6 +53,9 @@ class Database : public QObject {
 		static void setFavorites(const QList<FavoriteServer> &servers);
 		static void setPassword(const QString &host, unsigned short port, const QString &user, const QString &pw);
 		static bool fuzzyMatch(QString &name, QString &user, QString &pw, QString &host, unsigned short port);
+
+		static bool isLocalIgnored(const QString &hash);
+		static void setLocalIgnored(const QString &hash, bool ignored);
 
 		static bool isLocalMuted(const QString &hash);
 		static void setLocalMuted(const QString &hash, bool muted);
@@ -85,6 +87,4 @@ class Database : public QObject {
 		static void setUdp(const QByteArray &digest, bool udp);
 };
 
-#else
-class Database;
 #endif

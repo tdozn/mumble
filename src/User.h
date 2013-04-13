@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,11 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _MUMBLE_USER_H
-#define _MUMBLE_USER_H
+#ifndef MUMBLE_USER_H_
+#define MUMBLE_USER_H_
 
-#include "murmur_pch.h"
+#include <QtCore/QByteArray>
+#include <QtCore/QString>
 
 class Channel;
 
@@ -59,6 +60,4 @@ class User {
 		static bool lessThan(const User *, const User *);
 };
 
-#else
-class User;
 #endif

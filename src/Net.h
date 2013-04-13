@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,16 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _NET_H
-#define _NET_H
+#ifndef NET_H_
+#define NET_H_
 
-#include "murmur_pch.h"
+#include <QtCore/QDateTime>
+#include <QtCore/QString>
+#include <QtNetwork/Q_IPV6ADDR>
+
+#ifndef DEFAULT_MUMBLE_PORT
+#define DEFAULT_MUMBLE_PORT 64738
+#endif
 
 struct HostAddress {
 	union {
@@ -61,6 +67,7 @@ struct HostAddress {
 	std::string toStdString() const;
 	QHostAddress toAddress() const;
 	QByteArray toByteArray() const;
+	void toSockaddr(struct sockaddr_storage *dst) const;
 };
 
 Q_DECLARE_TYPEINFO(HostAddress, Q_MOVABLE_TYPE);

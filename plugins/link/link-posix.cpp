@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2012, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -73,7 +73,7 @@ static int32_t GetTickCount() {
 	return tv.tv_usec / 1000 + tv.tv_sec * 1000;
 }
 
-static struct LinkedMem * const lm_invalid = reinterpret_cast<struct LinkedMem *>(-1);
+#define lm_invalid reinterpret_cast<struct LinkedMem *>(-1)
 static struct LinkedMem *lm = lm_invalid;
 static int shmfd = -1;
 
@@ -181,8 +181,14 @@ static void load_plugin() {
 		return;
 	}
 
-	if (bCreated)
-		ftruncate(shmfd, sizeof(struct LinkedMem));
+	if (bCreated) {
+		if (ftruncate(shmfd, sizeof(struct LinkedMem)) != 0) {
+			fprintf(stderr, "Mumble Link plugin: failed to resize shared memory\n");
+			close(shmfd);
+			shmfd = -1;
+			return;
+		}
+	}
 
 	lm = static_cast<struct LinkedMem*>(
 	         mmap(NULL, sizeof(struct LinkedMem), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd,0));

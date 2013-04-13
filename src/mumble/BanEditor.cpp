@@ -1,4 +1,4 @@
-/* copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,14 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "BanEditor.h"
-#include "ServerHandler.h"
+
 #include "Channel.h"
 #include "Global.h"
+#include "Net.h"
+#include "ServerHandler.h"
 
 BanEditor::BanEditor(const MumbleProto::BanList &msg, QWidget *p) : QDialog(p) {
 	setupUi(this);

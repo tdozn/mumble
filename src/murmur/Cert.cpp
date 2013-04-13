@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,8 +28,10 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "Server.h"
+#include "murmur_pch.h"
+
 #include "Meta.h"
+#include "Server.h"
 
 #define SSL_STRING(x) QString::fromLatin1(x).toUtf8().data()
 
@@ -59,12 +61,12 @@ bool Server::isKeyForCert(const QSslKey &key, const QSslCertificate &cert) {
 	BIO *mem = NULL;
 
 	mem = BIO_new_mem_buf(qbaKey.data(), qbaKey.size());
-	BIO_set_close(mem, BIO_NOCLOSE);
+	Q_UNUSED(BIO_set_close(mem, BIO_NOCLOSE));
 	pkey = d2i_PrivateKey_bio(mem, NULL);
 	BIO_free(mem);
 
 	mem = BIO_new_mem_buf(qbaCert.data(), qbaCert.size());
-	BIO_set_close(mem, BIO_NOCLOSE);
+	Q_UNUSED(BIO_set_close(mem, BIO_NOCLOSE));
 	x509 = d2i_X509_bio(mem, NULL);
 	BIO_free(mem);
 	mem = NULL;
@@ -181,5 +183,5 @@ void Server::initializeCert() {
 }
 
 const QString Server::getDigest() const {
-	return QString::fromLatin1(qscCert.digest().toHex());
+	return QString::fromLatin1(qscCert.digest(QCryptographicHash::Sha1).toHex());
 }

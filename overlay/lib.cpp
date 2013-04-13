@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -30,11 +30,15 @@
 
 #include "lib.h"
 
+#include "overlay_blacklist.h"
+
 static HANDLE hMapObject = NULL;
 static HANDLE hHookMutex = NULL;
 static HHOOK hhookWnd = 0;
 
 HMODULE hSelf = NULL;
+BOOL bIsWin8 = FALSE;
+
 static BOOL bMumble = FALSE;
 static BOOL bDebug = FALSE;
 static BOOL bBlackListed = FALSE;
@@ -126,44 +130,6 @@ Mutex::Mutex() {
 
 Mutex::~Mutex() {
 	LeaveCriticalSection(&cs);
-}
-
-void __cdecl _ods_out(const char *format, va_list *args) {
-	char buf[4096], *p = buf + 2;
-
-	buf[0] = 'M'; // Add a prefix
-	buf[1] = ':';
-
-	// Format but be aware of space taken by prefix
-	int len = _vsnprintf_s(p, sizeof(buf) - 3, _TRUNCATE, format, *args);
-
-
-	if (len <= 0)
-		return;
-
-	p += len;
-
-	// Truncate trailing spaces
-	while (p > (buf + 2) && isspace(p[-1]))
-		*--p = '\0';
-
-	// Add custom termination
-	if (p > (buf + sizeof(buf) - 3)) { // Make sure there's space
-		p = buf + sizeof(buf) - 3;
-	}
-	*p++ = '\r';
-	*p++ = '\n';
-	*p   = '\0';
-
-	OutputDebugStringA(buf);
-}
-
-void __cdecl fods(const char *format, ...) {
-	va_list args;
-
-	va_start(args, format);
-	_ods_out(format, &args);
-	va_end(args);
 }
 
 void __cdecl ods(const char *format, ...) {
@@ -524,18 +490,17 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE, DWORD fdwReason, LPVOID) {
 				char *p = strrchr(procname, '\\');
 				if (!p) {
 					// No blacklisting if the file has no path
-				} else if ((_stricmp(p+1, "mumble.exe")==0) || (_stricmp(p+1, "mumble11x.exe")==0)) {
+				} else if (GetProcAddress(NULL, "mumbleSelfDetection") != NULL) {
 					ods("Attached to self");
 					bBlackListed = TRUE;
 					bMumble = TRUE;
 				} else {
-					int i = 0;
 					DWORD buffsize = MAX_PATH * 20; // Initial buffer size for registry operation
 
 					bool usewhitelist;
 					HKEY key = NULL;
 
-					bool success = true;
+					bool success;
 					char *buffer = new char[buffsize];
 
 					DWORD tmpsize = buffsize - 1;
@@ -567,7 +532,7 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE, DWORD fdwReason, LPVOID) {
 
 						if (usewhitelist) {
 							bool onwhitelist = false;
-							while (buffer[pos] != 0 && pos < buffsize) {
+							while (pos < buffsize && buffer[pos] != 0) {
 								if (_stricmp(procname, buffer + pos) == 0 || _stricmp(p+1, buffer + pos) == 0) {
 									fods("Overlay enabled for whitelisted '%s'", buffer + pos);
 									onwhitelist = true;
@@ -582,7 +547,7 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE, DWORD fdwReason, LPVOID) {
 								break;
 							}
 						} else {
-							while (buffer[pos] != 0 && pos < buffsize) {
+							while (pos < buffsize && buffer[pos] != 0) {
 								if (_stricmp(procname, buffer + pos) == 0 || _stricmp(p+1, buffer + pos) == 0) {
 									fods("Overlay blacklist entry found for '%s'", buffer + pos);
 									bBlackListed = TRUE;
@@ -594,6 +559,7 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE, DWORD fdwReason, LPVOID) {
 					} else {
 						// If there is no list in the registry fallback to using the default blacklist
 						fods("Overlay fallback to default blacklist");
+						int i = 0;
 						while (overlayBlacklist[i]) {
 							if (_stricmp(procname, overlayBlacklist[i]) == 0 || _stricmp(p+1, overlayBlacklist[i])==0) {
 								fods("Overlay default blacklist entry found for '%s'", overlayBlacklist[i]);
@@ -637,6 +603,14 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE, DWORD fdwReason, LPVOID) {
 				}
 				ods("Lib: ProcAttach: %s", procname);
 
+				OSVERSIONINFOEX ovi;
+				memset(&ovi, 0, sizeof(ovi));
+				ovi.dwOSVersionInfoSize = sizeof(ovi);
+				GetVersionEx(reinterpret_cast<OSVERSIONINFO *>(&ovi));
+				bIsWin8 = (ovi.dwMajorVersion >= 7) || ((ovi.dwMajorVersion == 6) &&(ovi.dwBuildNumber >= 9200));
+
+				ods("Lib: bIsWin8: %i", bIsWin8);
+
 				hHookMutex = CreateMutex(NULL, false, "MumbleHookMutex");
 				if (hHookMutex == NULL) {
 					ods("Lib: CreateMutex failed");
@@ -653,7 +627,7 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE, DWORD fdwReason, LPVOID) {
 
 				bool bInit = (GetLastError() != ERROR_ALREADY_EXISTS);
 
-				sd = (SharedData *) MapViewOfFile(hMapObject, FILE_MAP_ALL_ACCESS, 0, 0, dwSharedSize);
+				sd = static_cast<SharedData *>(MapViewOfFile(hMapObject, FILE_MAP_ALL_ACCESS, 0, 0, dwSharedSize));
 
 				if (sd == NULL) {
 					ods("MapViewOfFile Failed");
@@ -664,8 +638,8 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE, DWORD fdwReason, LPVOID) {
 					memset(sd, 0, dwSharedSize);
 
 				unsigned char *raw = (unsigned char *) sd;
-				d3dd = (Direct3D9Data *)(raw + sizeof(SharedData));
-				dxgi = (DXGIData *)(raw + sizeof(SharedData) + sizeof(Direct3D9Data));
+				d3dd = reinterpret_cast<Direct3D9Data *>(raw + sizeof(SharedData));
+				dxgi = reinterpret_cast<DXGIData *>(raw + sizeof(SharedData) + sizeof(Direct3D9Data));
 
 
 				if (! bMumble) {

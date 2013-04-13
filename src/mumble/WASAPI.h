@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,11 +28,13 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _WASAPI_H
-#define _WASAPI_H
+#ifndef WASAPI_H_
+#define WASAPI_H_
 
-#include "AudioInput.h"
-#include "AudioOutput.h"
+#include <QtCore/QObject>
+#include <QtCore/QUuid>
+
+#include <windows.h>
 #include <mmreg.h>
 #include <strsafe.h>
 #include <mmdeviceapi.h>
@@ -44,6 +46,9 @@
 #include <initguid.h>
 #include <Audiopolicy.h>
 
+#include "AudioInput.h"
+#include "AudioOutput.h"
+
 class WASAPISystem : public QObject {
 	private:
 		Q_OBJECT
@@ -52,7 +57,7 @@ class WASAPISystem : public QObject {
 		static const QHash<QString, QString> getDevices(EDataFlow dataflow);
 		static const QHash<QString, QString> getInputDevices();
 		static const QHash<QString, QString> getOutputDevices();
-		static const QList<audioDevice> mapToDevice(const QHash<QString, QString>, const QString &);
+		static const QList<audioDevice> mapToDevice(const QHash<QString, QString>&, const QString&);
 };
 
 class WASAPIInput : public AudioInput {
@@ -69,6 +74,9 @@ class WASAPIOutput : public AudioOutput {
 	private:
 		Q_OBJECT
 		Q_DISABLE_COPY(WASAPIOutput)
+		
+		bool setVolumeForSessionControl(IAudioSessionControl *control, const DWORD mumblePID, QSet<QUuid> &seen);
+		bool setVolumeForSessionControl2(IAudioSessionControl2 *control2, const DWORD mumblePID, QSet<QUuid> &seen);
 	protected:
 		typedef QPair<float, float> VolumePair;
 		QMap<ISimpleAudioVolume *, VolumePair> qmVolumes;

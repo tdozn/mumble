@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,11 +28,16 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "murmur_pch.h"
+
+#include "Meta.h"
+
+#include "Connection.h"
+#include "Net.h"
 #include "ServerDB.h"
 #include "Server.h"
-#include "Meta.h"
-#include "DBus.h"
 #include "OSInfo.h"
+#include "Version.h"
 
 MetaParams Meta::mp;
 
@@ -42,7 +47,7 @@ HANDLE Meta::hQoS = NULL;
 
 MetaParams::MetaParams() {
 	qsPassword = QString();
-	usPort = 64738;
+	usPort = DEFAULT_MUMBLE_PORT;
 	iTimeout = 30;
 	iMaxBandwidth = 72000;
 	iMaxUsers = 1000;
@@ -71,7 +76,13 @@ MetaParams::MetaParams() {
 	iBanTimeframe = 120;
 	iBanTime = 300;
 
+#ifdef Q_OS_UNIX
 	uiUid = uiGid = 0;
+#endif
+
+	iOpusThreshold = 100;
+
+	iChannelNestingLimit = 10;
 
 	qrUserName = QRegExp(QLatin1String("[-=\\w\\[\\]\\{\\}\\(\\)\\@\\|\\.]+"));
 	qrChannelName = QRegExp(QLatin1String("[ \\-=\\w\\#\\[\\]\\{\\}\\(\\)\\@\\|]+"));
@@ -81,6 +92,31 @@ MetaParams::MetaParams() {
 
 MetaParams::~MetaParams() {
 	delete qsSettings;
+}
+
+/**
+ *	Checks whether a qsSettings config variable named 'name' was set to a valid value for the type
+ *  we want to convert it to. Otherwise a error message is logged and 'defaultValue' is returned.
+ *
+ *  E.g. checkedFromSettings<QString>("blub", bla) would output an error message and leave bla unchanged
+ *		 if the user had set the ini parameter to "blub = has, commas, in, it" which QSettings will interpret
+ *		 not as a String but as a list of strings.
+ *
+ *	@param T Conversion target type (type of 'defaultValue', auto inducable)
+ *	@param name qsSettings variable name
+ *	@param defaultValue Default value for 'name'
+ *	@return Setting if valid, default if not or setting not set.
+ */
+template <class T>
+T MetaParams::typeCheckedFromSettings(const QString &name, const T &defaultValue) {
+	QVariant cfgVariable = qsSettings->value(name, defaultValue);
+
+	if (!cfgVariable.convert(QVariant(defaultValue).type())) { // Bit convoluted as canConvert<T>() only does a static check without considering whether say a string like "blub" is actually a valid double (which convert does).
+		qCritical() << "Configuration variable" << name << "is of invalid format. Set to default value of" << defaultValue << ".";
+		return defaultValue;
+	}
+
+	return cfgVariable.value<T>();
 }
 
 void MetaParams::read(QString fname) {
@@ -216,78 +252,101 @@ void MetaParams::read(QString fname) {
 			qlBind << QHostAddress(QHostAddress::Any);
 	}
 
-	qsPassword = qsSettings->value("serverpassword", qsPassword).toString();
-	usPort = static_cast<unsigned short>(qsSettings->value("port", usPort).toUInt());
-	iTimeout = qsSettings->value("timeout", iTimeout).toInt();
-	iMaxTextMessageLength = qsSettings->value("textmessagelength", iMaxTextMessageLength).toInt();
-	iMaxImageMessageLength = qsSettings->value("imagemessagelength", iMaxImageMessageLength).toInt();
-	bAllowHTML = qsSettings->value("allowhtml", bAllowHTML).toBool();
-	iMaxBandwidth = qsSettings->value("bandwidth", iMaxBandwidth).toInt();
-	iDefaultChan = qsSettings->value("defaultchannel", iDefaultChan).toInt();
-	bRememberChan = qsSettings->value("rememberchannel", bRememberChan).toBool();
-	iMaxUsers = qsSettings->value("users", iMaxUsers).toInt();
-	iMaxUsersPerChannel = qsSettings->value("usersperchannel", iMaxUsersPerChannel).toInt();
-	qsWelcomeText = qsSettings->value("welcometext", qsWelcomeText).toString();
-	bCertRequired = qsSettings->value("certrequired", bCertRequired).toBool();
+	qsPassword = typeCheckedFromSettings("serverpassword", qsPassword);
+	usPort = static_cast<unsigned short>(typeCheckedFromSettings("port", static_cast<uint>(usPort)));
+	iTimeout = typeCheckedFromSettings("timeout", iTimeout);
+	iMaxTextMessageLength = typeCheckedFromSettings("textmessagelength", iMaxTextMessageLength);
+	iMaxImageMessageLength = typeCheckedFromSettings("imagemessagelength", iMaxImageMessageLength);
+	bAllowHTML = typeCheckedFromSettings("allowhtml", bAllowHTML);
+	iMaxBandwidth = typeCheckedFromSettings("bandwidth", iMaxBandwidth);
+	iDefaultChan = typeCheckedFromSettings("defaultchannel", iDefaultChan);
+	bRememberChan = typeCheckedFromSettings("rememberchannel", bRememberChan);
+	iMaxUsers = typeCheckedFromSettings("users", iMaxUsers);
+	iMaxUsersPerChannel = typeCheckedFromSettings("usersperchannel", iMaxUsersPerChannel);
+	qsWelcomeText = typeCheckedFromSettings("welcometext", qsWelcomeText);
+	bCertRequired = typeCheckedFromSettings("certrequired", bCertRequired);
 
-	qsDatabase = qsSettings->value("database", qsDatabase).toString();
+	qsDatabase = typeCheckedFromSettings("database", qsDatabase);
 
-	qsDBDriver = qsSettings->value("dbDriver", qsDBDriver).toString();
-	qsDBUserName = qsSettings->value("dbUsername", qsDBUserName).toString();
-	qsDBPassword = qsSettings->value("dbPassword", qsDBPassword).toString();
-	qsDBHostName = qsSettings->value("dbHost", qsDBHostName).toString();
-	qsDBPrefix = qsSettings->value("dbPrefix", qsDBPrefix).toString();
-	qsDBOpts = qsSettings->value("dbOpts", qsDBOpts).toString();
-	iDBPort = qsSettings->value("dbPort", iDBPort).toInt();
+	qsDBDriver = typeCheckedFromSettings("dbDriver", qsDBDriver);
+	qsDBUserName = typeCheckedFromSettings("dbUsername", qsDBUserName);
+	qsDBPassword = typeCheckedFromSettings("dbPassword", qsDBPassword);
+	qsDBHostName = typeCheckedFromSettings("dbHost", qsDBHostName);
+	qsDBPrefix = typeCheckedFromSettings("dbPrefix", qsDBPrefix);
+	qsDBOpts = typeCheckedFromSettings("dbOpts", qsDBOpts);
+	iDBPort = typeCheckedFromSettings("dbPort", iDBPort);
 
-	qsIceEndpoint = qsSettings->value("ice", qsIceEndpoint).toString();
-	qsIceSecretRead = qsSettings->value("icesecret", qsIceSecretRead).toString();
-	qsIceSecretRead = qsSettings->value("icesecretread", qsIceSecretRead).toString();
-	qsIceSecretWrite = qsSettings->value("icesecretwrite", qsIceSecretRead).toString();
+	qsIceEndpoint = typeCheckedFromSettings("ice", qsIceEndpoint);
+	qsIceSecretRead = typeCheckedFromSettings("icesecret", qsIceSecretRead);
+	qsIceSecretRead = typeCheckedFromSettings("icesecretread", qsIceSecretRead);
+	qsIceSecretWrite = typeCheckedFromSettings("icesecretwrite", qsIceSecretRead);
 
-	iLogDays = qsSettings->value("logdays", iLogDays).toInt();
+	iLogDays = typeCheckedFromSettings("logdays", iLogDays);
 
-	qsDBus = qsSettings->value("dbus", qsDBus).toString();
-	qsDBusService = qsSettings->value("dbusservice", qsDBusService).toString();
-	qsLogfile = qsSettings->value("logfile", qsLogfile).toString();
-	qsPid = qsSettings->value("pidfile", qsPid).toString();
+	qsDBus = typeCheckedFromSettings("dbus", qsDBus);
+	qsDBusService = typeCheckedFromSettings("dbusservice", qsDBusService);
+	qsLogfile = typeCheckedFromSettings("logfile", qsLogfile);
+	qsPid = typeCheckedFromSettings("pidfile", qsPid);
 
-	qsRegName = qsSettings->value("registerName", qsRegName).toString();
-	qsRegPassword = qsSettings->value("registerPassword", qsRegPassword).toString();
-	qsRegHost = qsSettings->value("registerHostname", qsRegHost).toString();
-	qsRegLocation = qsSettings->value("registerLocation", qsRegLocation).toString();
-	qurlRegWeb = QUrl(qsSettings->value("registerUrl", qurlRegWeb.toString()).toString());
-	bBonjour = qsSettings->value("bonjour", bBonjour).toBool();
+	qsRegName = typeCheckedFromSettings("registerName", qsRegName);
+	qsRegPassword = typeCheckedFromSettings("registerPassword", qsRegPassword);
+	qsRegHost = typeCheckedFromSettings("registerHostname", qsRegHost);
+	qsRegLocation = typeCheckedFromSettings("registerLocation", qsRegLocation);
+	qurlRegWeb = QUrl(typeCheckedFromSettings("registerUrl", qurlRegWeb).toString());
+	bBonjour = typeCheckedFromSettings("bonjour", bBonjour);
 
-	iBanTries = qsSettings->value("autobanAttempts", iBanTries).toInt();
-	iBanTimeframe = qsSettings->value("autobanTimeframe", iBanTimeframe).toInt();
-	iBanTime = qsSettings->value("autobanTime", iBanTime).toInt();
+	iBanTries = typeCheckedFromSettings("autobanAttempts", iBanTries);
+	iBanTimeframe = typeCheckedFromSettings("autobanTimeframe", iBanTimeframe);
+	iBanTime = typeCheckedFromSettings("autobanTime", iBanTime);
+
+	qvSuggestVersion = MumbleVersion::getRaw(qsSettings->value("suggestVersion").toString());
+	if (qvSuggestVersion.toUInt() == 0)
+		qvSuggestVersion = QVariant();
+
+	qvSuggestPositional = qsSettings->value("suggestPositional");
+	if (qvSuggestPositional.toString().trimmed().isEmpty())
+		qvSuggestPositional = QVariant();
+
+	qvSuggestPushToTalk = qsSettings->value("suggestPushToTalk");
+	if (qvSuggestPushToTalk.toString().trimmed().isEmpty())
+		qvSuggestPushToTalk = QVariant();
+
+	iOpusThreshold = typeCheckedFromSettings("opusthreshold", iOpusThreshold);
+
+	iChannelNestingLimit = typeCheckedFromSettings("channelnestinglimit", iChannelNestingLimit);
 
 #ifdef Q_OS_UNIX
-	const QString uname = qsSettings->value("uname").toString();
-	if (! uname.isEmpty() && (geteuid() == 0)) {
-		struct passwd *pw = getpwnam(qPrintable(uname));
+	qsName = qsSettings->value("uname").toString();
+	if (geteuid() == 0) {
+		// TODO: remove this silent fallback to enforce running as non-root
+		bool requested = true;
+		if (qsName.isEmpty()) {
+			// default server user name
+			qsName = "mumble-server";
+			requested = false;
+		}
+		struct passwd *pw = getpwnam(qPrintable(qsName));
 		if (pw) {
 			uiUid = pw->pw_uid;
 			uiGid = pw->pw_gid;
-		}
-		if (uiUid == 0) {
-			qFatal("Cannot find username %s", qPrintable(uname));
+			qsHome = pw->pw_dir;
+		} else if (requested) {
+			qFatal("Cannot find username %s", qPrintable(qsName));
 		}
 		endpwent();
 	}
 #endif
 
-	qrUserName = QRegExp(qsSettings->value("username", qrUserName.pattern()).toString());
-	qrChannelName = QRegExp(qsSettings->value("channelname", qrChannelName.pattern()).toString());
+	qrUserName = QRegExp(typeCheckedFromSettings("username", qrUserName.pattern()));
+	qrChannelName = QRegExp(typeCheckedFromSettings("channelname", qrChannelName.pattern()));
 
-	bool bObfuscate = qsSettings->value("obfuscate", false).toBool();
+	bool bObfuscate = typeCheckedFromSettings("obfuscate", false);
 	if (bObfuscate) {
 		qWarning("IP address obfuscation enabled.");
 		iObfuscate = qrand();
 	}
-	bSendVersion = qsSettings->value("sendversion", bSendVersion).toBool();
-	bAllowPing = qsSettings->value("allowping", bAllowPing).toBool();
+	bSendVersion = typeCheckedFromSettings("sendversion", bSendVersion);
+	bAllowPing = typeCheckedFromSettings("allowping", bAllowPing);
 
 	QString qsSSLCert = qsSettings->value("sslCert").toString();
 	QString qsSSLKey = qsSettings->value("sslKey").toString();
@@ -411,6 +470,11 @@ void MetaParams::read(QString fname) {
 	qmConfig.insert(QLatin1String("username"),qrUserName.pattern());
 	qmConfig.insert(QLatin1String("channelname"),qrChannelName.pattern());
 	qmConfig.insert(QLatin1String("certrequired"), bCertRequired ? QLatin1String("true") : QLatin1String("false"));
+	qmConfig.insert(QLatin1String("suggestversion"), qvSuggestVersion.isNull() ? QString() : qvSuggestVersion.toString());
+	qmConfig.insert(QLatin1String("suggestpositional"), qvSuggestPositional.isNull() ? QString() : qvSuggestPositional.toString());
+	qmConfig.insert(QLatin1String("suggestpushtotalk"), qvSuggestPushToTalk.isNull() ? QString() : qvSuggestPushToTalk.toString());
+	qmConfig.insert(QLatin1String("opusthreshold"), QString::number(iOpusThreshold));
+	qmConfig.insert(QLatin1String("channelnestinglimit"), QString::number(iChannelNestingLimit));
 }
 
 Meta::Meta() {
@@ -468,7 +532,7 @@ bool Meta::boot(int srvnum) {
 	emit started(s);
 
 #ifdef Q_OS_UNIX
-	int sockets = 19; // Base
+	unsigned int sockets = 19; // Base
 	foreach(s, qhServers) {
 		sockets += 11; // Listen sockets, signal pipes etc.
 		sockets += s->iMaxUsers; // One per user
@@ -490,7 +554,7 @@ bool Meta::boot(int srvnum) {
 			}
 		}
 		if (r.rlim_cur < sockets)
-			qCritical("Current booted servers require minimum %d file descriptors when all slots are full, but only %d file descriptors are allowed for this process. Your server will crash and burn; read the FAQ for details.", sockets, r.rlim_cur);
+			qCritical("Current booted servers require minimum %d file descriptors when all slots are full, but only %ld file descriptors are allowed for this process. Your server will crash and burn; read the FAQ for details.", sockets, r.rlim_cur);
 	}
 #endif
 

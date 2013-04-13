@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,15 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _CHANNEL_H
-#define _CHANNEL_H
+#ifndef CHANNEL_H_
+#define CHANNEL_H_
 
-#include "murmur_pch.h"
+#include <QtCore/QHash>
+#include <QtCore/QList>
+#include <QtCore/QObject>
+#include <QtCore/QReadWriteLock>
+#include <QtCore/QSet>
+#include <QtCore/QString>
 
 class User;
 class Group;
@@ -80,6 +85,9 @@ class Channel : public QObject {
 #endif
 		static bool lessThan(const Channel *, const Channel *);
 
+		size_t getLevel() const;
+		size_t getDepth() const;
+
 		void addChannel(Channel *c);
 		void removeChannel(Channel *c);
 		void addUser(User *p);
@@ -95,6 +103,4 @@ class Channel : public QObject {
 		operator const QString() const;
 };
 
-#else
-class Channel;
 #endif

@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,13 +28,13 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _CONFIGDIALOG_H
-#define _CONFIGDIALOG_H
+#ifndef CONFIGDIALOG_H_
+#define CONFIGDIALOG_H_
 
-#include "mumble_pch.hpp"
-#include "ui_ConfigDialog.h"
 #include "ConfigWidget.h"
 #include "Settings.h"
+
+#include "ui_ConfigDialog.h"
 
 class ConfigDialog : public QDialog, public Ui::ConfigDialog {
 	private:
@@ -67,6 +67,4 @@ class ConfigDialog : public QDialog, public Ui::ConfigDialog {
 		void accept();
 };
 
-#else
-class ConfigDialog;
 #endif

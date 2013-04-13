@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,12 +28,21 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "ConnectDialog.h"
-#include "Global.h"
-#include "ServerHandler.h"
+
+#ifdef USE_BONJOUR
+#include "BonjourClient.h"
+#include "BonjourServiceBrowser.h"
+#include "BonjourServiceResolver.h"
+#endif
+
 #include "Channel.h"
 #include "Database.h"
-#include "NetworkConfig.h"
+#include "Global.h"
+#include "ServerHandler.h"
+#include "WebFetch.h"
 
 QMap<QString, QIcon> ServerItem::qmIcons;
 QList<PublicInfo> ConnectDialog::qlPublicServers;
@@ -104,7 +113,7 @@ ServerView::~ServerView() {
 	delete siPublic;
 }
 
-QMimeData *ServerView::mimeData(const QList<QTreeWidgetItem *> mimeitems) const {
+QMimeData *ServerView::mimeData(const QList<QTreeWidgetItem *>& mimeitems) const {
 	if (mimeitems.isEmpty())
 		return NULL;
 
@@ -209,29 +218,12 @@ ServerItem *ServerView::getParent(const QString &continentcode, const QString &c
 
 
 void ServerItem::init() {
-#if QT_VERSION < 0x040500
-	m_emitDataChanged = 0;
-#endif
 	// Without this, columncount is wrong.
 	setData(0, Qt::DisplayRole, QVariant());
 	setData(1, Qt::DisplayRole, QVariant());
 	setData(2, Qt::DisplayRole, QVariant());
 	emitDataChanged();
 }
-
-#if QT_VERSION < 0x040500
-void ServerItem::emitDataChanged() {
-	static QVariant emitDataChangedQVariants[] = { QVariant(0), QVariant(1) };
-
-	if (! treeWidget() || ! treeWidget()->header())
-		return;
-
-	m_emitDataChanged = !m_emitDataChanged;
-
-	int sortCol = treeWidget()->header()->sortIndicatorSection();
-	setData((sortCol > 0) ? sortCol : 0, Qt::UserRole, emitDataChangedQVariants[m_emitDataChanged]);
-}
-#endif
 
 ServerItem::ServerItem(const FavoriteServer &fs) : QTreeWidgetItem(QTreeWidgetItem::UserType) {
 	siParent = NULL;
@@ -409,7 +401,7 @@ ServerItem *ServerItem::fromMimeData(const QMimeData *mime, QWidget *p) {
 	if (! url.hasQueryItem(QLatin1String("title")))
 		url.addQueryItem(QLatin1String("title"), url.host());
 
-	ServerItem *si = new ServerItem(url.queryItemValue(QLatin1String("title")), url.host(), static_cast<unsigned short>(url.port()), url.userName(), url.password());
+	ServerItem *si = new ServerItem(url.queryItemValue(QLatin1String("title")), url.host(), static_cast<unsigned short>(url.port(DEFAULT_MUMBLE_PORT)), url.userName(), url.password());
 
 	if (url.hasQueryItem(QLatin1String("url")))
 		si->qsUrl = url.queryItemValue(QLatin1String("url"));
@@ -480,7 +472,7 @@ QVariant ServerItem::data(int column, int role) const {
 					            arg(boost::accumulators::extended_p_square(* asQuantile)[2] / 1000., 0, 'f', 2)) +
 					    QString::fromLatin1("<tr><th align=left>%1</th><td>%2</td></tr>").arg(ConnectDialog::tr("Bandwidth"), ConnectDialog::tr("%1 kbit/s").arg(uiBandwidth / 1000)) +
 					    QString::fromLatin1("<tr><th align=left>%1</th><td>%2</td></tr>").arg(ConnectDialog::tr("Users"), QString::fromLatin1("%1/%2").arg(uiUsers).arg(uiMaxUsers)) +
-					    QString::fromLatin1("<tr><th align=left>%1</th><td>%2.%3.%4</td></tr>").arg(ConnectDialog::tr("Version")).arg(uiVersion >> 16).arg((uiVersion >> 8) & 0xFF).arg(uiVersion & 0xFF);
+					    QString::fromLatin1("<tr><th align=left>%1</th><td>%2</td></tr>").arg(ConnectDialog::tr("Version")).arg(MumbleVersion::toString(uiVersion));
 				}
 			}
 			qs += QLatin1String("</table>");
@@ -514,7 +506,7 @@ void ServerItem::hideCheck() {
 
 	if (! bParent && (itType == PublicType)) {
 		if (g.s.ssFilter == Settings::ShowReachable)
-			hide = (uiPing == 0);
+			hide = (dPing == 0.0);
 		else if (g.s.ssFilter == Settings::ShowPopulated)
 			hide = (uiUsers == 0);
 	}
@@ -570,14 +562,34 @@ FavoriteServer ServerItem::toFavoriteServer() const {
 	return fs;
 }
 
+
+/*!
+  \fn QMimeData *ServerItem::toMimeData() const
+  This function turns a ServerItem object into a QMimeData object holding a URL to the server.
+*/
 QMimeData *ServerItem::toMimeData() const {
+	QMimeData *mime = ServerItem::toMimeData(qsName, qsHostname, usPort);
+
+	if (itType == FavoriteType)
+		mime->setData(QLatin1String("OriginatedInMumble"), QByteArray());
+
+	return mime;
+}
+
+/*!
+  \fn QMimeData *ServerItem::toMimeData(const QString &name, const QString &host, unsigned short port, const QString &channel)
+  This function creates a QMimeData object containing a URL to the server at \a host and \a port. \a name is passed in the
+  query string as "title", which is used for adding a server to favorites. \a channel may be omitted, but if specified it
+  should be in the format of "/path/to/channel".
+*/
+QMimeData *ServerItem::toMimeData(const QString &name, const QString &host, unsigned short port, const QString &channel) {
 	QUrl url;
 	url.setScheme(QLatin1String("mumble"));
-	url.setHost(qsHostname);
-	url.setPort(usPort);
-	url.addQueryItem(QLatin1String("title"), qsName);
-	if (! qsUrl.isEmpty())
-		url.addQueryItem(QLatin1String("url"), qsUrl);
+	url.setHost(host);
+	if (port != DEFAULT_MUMBLE_PORT)
+		url.setPort(port);
+	url.setPath(channel);
+	url.addQueryItem(QLatin1String("title"), name);
 	url.addQueryItem(QLatin1String("version"), QLatin1String("1.2.0"));
 
 	QString qs = QLatin1String(url.toEncoded());
@@ -586,7 +598,7 @@ QMimeData *ServerItem::toMimeData() const {
 
 #ifdef Q_OS_WIN
 	QString contents = QString::fromLatin1("[InternetShortcut]\r\nURL=%1\r\n").arg(qs);
-	QString urlname = QString::fromLatin1("%1.url").arg(qsName);
+	QString urlname = QString::fromLatin1("%1.url").arg(name);
 
 	FILEGROUPDESCRIPTORA fgda;
 	ZeroMemory(&fgda, sizeof(fgda));
@@ -601,10 +613,10 @@ QMimeData *ServerItem::toMimeData() const {
 	fgdw.cItems = 1;
 	fgdw.fgd[0].dwFlags = FD_LINKUI | FD_FILESIZE;
 	fgdw.fgd[0].nFileSizeLow=contents.length();
-	wcscpy_s(fgdw.fgd[0].cFileName, MAX_PATH, urlname.utf16());
+	wcscpy_s(fgdw.fgd[0].cFileName, MAX_PATH, urlname.toStdWString().c_str());
 	mime->setData(QLatin1String("FileGroupDescriptorW"), QByteArray(reinterpret_cast<const char *>(&fgdw), sizeof(fgdw)));
 
-	mime->setData(QString::fromUtf16(CFSTR_FILECONTENTS), contents.toLocal8Bit());
+	mime->setData(QString::fromWCharArray(CFSTR_FILECONTENTS), contents.toLocal8Bit());
 
 	DWORD context[4];
 	context[0] = 0;
@@ -615,17 +627,14 @@ QMimeData *ServerItem::toMimeData() const {
 
 	DWORD dropaction;
 	dropaction = DROPEFFECT_LINK;
-	mime->setData(QString::fromUtf16(CFSTR_PREFERREDDROPEFFECT), QByteArray(reinterpret_cast<const char *>(&dropaction), sizeof(dropaction)));
+	mime->setData(QString::fromWCharArray(CFSTR_PREFERREDDROPEFFECT), QByteArray(reinterpret_cast<const char *>(&dropaction), sizeof(dropaction)));
 #endif
 	QList<QUrl> urls;
 	urls << url;
 	mime->setUrls(urls);
 
 	mime->setText(qs);
-	mime->setHtml(QString::fromLatin1("<a href=\"%1\">%2</a>").arg(qs).arg(qsName));
-
-	if (itType == FavoriteType)
-		mime->setData(QLatin1String("OriginatedInMumble"), QByteArray());
+	mime->setHtml(QString::fromLatin1("<a href=\"%1\">%2</a>").arg(qs).arg(name));
 
 	return mime;
 }
@@ -756,12 +765,19 @@ ConnectDialog::ConnectDialog(QWidget *p, bool autoconnect) : QDialog(p), bAutoCo
 
 	qdbbButtonBox->button(QDialogButtonBox::Ok)->setText(tr("&Connect"));
 
-	QPushButton *qpb = new QPushButton(tr("&Add New..."), this);
-	qpb->setDefault(false);
-	qpb->setAutoDefault(false);
-	connect(qpb, SIGNAL(clicked()), qaFavoriteAddNew, SIGNAL(triggered()));
-	qdbbButtonBox->addButton(qpb, QDialogButtonBox::ActionRole);
+	QPushButton *qpbAdd = new QPushButton(tr("&Add New..."), this);
+	qpbAdd->setDefault(false);
+	qpbAdd->setAutoDefault(false);
+	connect(qpbAdd, SIGNAL(clicked()), qaFavoriteAddNew, SIGNAL(triggered()));
+	qdbbButtonBox->addButton(qpbAdd, QDialogButtonBox::ActionRole);
 
+	qpbEdit = new QPushButton(tr("&Edit..."), this);
+	qpbEdit->setEnabled(false);
+	qpbEdit->setDefault(false);
+	qpbEdit->setAutoDefault(false);
+	connect(qpbEdit, SIGNAL(clicked()), qaFavoriteEdit, SIGNAL(triggered()));
+	qdbbButtonBox->addButton(qpbEdit, QDialogButtonBox::ActionRole);
+	
 	qtwServers->sortItems(1, Qt::AscendingOrder);
 	qtwServers->header()->setResizeMode(0, QHeaderView::Stretch);
 	qtwServers->header()->setResizeMode(1, QHeaderView::ResizeToContents);
@@ -925,7 +941,7 @@ void ConnectDialog::on_qaFavoriteAdd_triggered() {
 void ConnectDialog::on_qaFavoriteAddNew_triggered() {
 	QString host, user, pw;
 	QString name;
-	unsigned short port = 64738;
+	unsigned short port = DEFAULT_MUMBLE_PORT;
 
 	// Try to fill out fields if possible
 	{
@@ -1089,7 +1105,13 @@ void ConnectDialog::on_qtwServers_itemDoubleClicked(QTreeWidgetItem *item, int) 
 void ConnectDialog::on_qtwServers_currentItemChanged(QTreeWidgetItem *item, QTreeWidgetItem *) {
 	ServerItem *si = static_cast<ServerItem *>(item);
 
-	bool bOk = (si && ! si->qlAddresses.isEmpty());
+	if (si->siParent == qtwServers->siFavorite) {
+		qpbEdit->setEnabled(true);
+	} else {
+		qpbEdit->setEnabled(false);
+	}
+	
+	bool bOk = !si->qlAddresses.isEmpty();
 	qdbbButtonBox->button(QDialogButtonBox::Ok)->setEnabled(bOk);
 
 	bLastFound = true;
@@ -1114,13 +1136,10 @@ void ConnectDialog::initList() {
 	bPublicInit = true;
 
 	QUrl url;
-	url.setScheme(QLatin1String("http"));
-	url.setHost(g.qsRegionalHost);
 	url.setPath(QLatin1String("/list2.cgi"));
 	url.addQueryItem(QLatin1String("version"), QLatin1String(MUMTEXT(MUMBLE_VERSION_STRING)));
 
-	QNetworkReply *rep = Network::get(url);
-	connect(rep, SIGNAL(finished()), this, SLOT(finished()));
+	WebFetch::fetch(url, this, SLOT(fetched(QByteArray,QUrl,QMap<QString,QString>)));
 }
 
 #ifdef USE_BONJOUR
@@ -1466,36 +1485,19 @@ void ConnectDialog::udpReply() {
 	}
 }
 
-static QString fromUtf8(const QByteArray &qba) {
-	if (qba.isEmpty())
-		return QString();
-	return QString::fromUtf8(qba.constData(), qba.length());
-}
-
-void ConnectDialog::finished() {
-	QNetworkReply *rep = qobject_cast<QNetworkReply *>(sender());
-	if (rep->error() != QNetworkReply::NoError) {
-		QUrl url = rep->request().url();
-		if (url.host() == g.qsRegionalHost) {
-			url.setHost(QLatin1String("mumble.info"));
-			QNetworkReply *nrep = Network::get(url);
-			connect(nrep, SIGNAL(finished()), this, SLOT(finished()));
-
-			rep->deleteLater();
-			return;
-		}
-
+void ConnectDialog::fetched(QByteArray data, QUrl, QMap<QString, QString> headers) {
+	if (data.isNull()) {
 		QMessageBox::warning(this, QLatin1String("Mumble"), tr("Failed to fetch server list"), QMessageBox::Ok);
 		return;
 	}
 
 	QDomDocument doc;
-	doc.setContent(rep->readAll());
+	doc.setContent(data);
 
 	qlPublicServers.clear();
-	qsUserCountry = fromUtf8(rep->rawHeader("Geo-Country"));
-	qsUserCountryCode = fromUtf8(rep->rawHeader("Geo-Country-Code")).toLower();
-	qsUserContinentCode = fromUtf8(rep->rawHeader("Geo-Continent-Code")).toLower();
+	qsUserCountry = headers.value(QLatin1String("Geo-Country"));
+	qsUserCountryCode = headers.value(QLatin1String("Geo-Country-Code")).toLower();
+	qsUserContinentCode = headers.value(QLatin1String("Geo-Continent-Code")).toLower();
 
 	QDomElement root=doc.documentElement();
 	QDomNode n = root.firstChild();
@@ -1522,6 +1524,4 @@ void ConnectDialog::finished() {
 	tPublicServers.restart();
 
 	fillList();
-
-	rep->deleteLater();
 }

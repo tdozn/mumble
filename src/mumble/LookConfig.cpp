@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2009, Stefan Hacker <dd0t@users.sourceforge.net>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2009-2011, Stefan Hacker <dd0t@users.sourceforge.net>
 
    All rights reserved.
 
@@ -29,9 +29,12 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
+#include "LookConfig.h"
+
 #include "AudioInput.h"
 #include "AudioOutput.h"
-#include "LookConfig.h"
 #include "Global.h"
 #include "MainWindow.h"
 
@@ -130,6 +133,7 @@ void LookConfig::load(const Settings &r) {
 	loadCheckBox(qcbShowUserCount, r.bShowUserCount);
 	loadCheckBox(qcbShowContextMenuInMenuBar, r.bShowContextMenuInMenuBar);
 	loadCheckBox(qcbHighContrast, r.bHighContrast);
+	loadCheckBox(qcbChatBarUseSelection, r.bChatBarUseSelection);
 }
 
 void LookConfig::save() const {
@@ -169,6 +173,7 @@ void LookConfig::save() const {
 	s.bShowUserCount = qcbShowUserCount->isChecked();
 	s.bShowContextMenuInMenuBar = qcbShowContextMenuInMenuBar->isChecked();
 	s.bHighContrast = qcbHighContrast->isChecked();
+	s.bChatBarUseSelection = qcbChatBarUseSelection->isChecked();
 }
 
 void LookConfig::accept() const {
@@ -190,6 +195,7 @@ void LookConfig::accept() const {
 			g.mw->qteLog->document()->setDefaultStyleSheet(sheet);
 		}
 	}
+	g.mw->setShowDockTitleBars(g.s.wlWindowLayout == Settings::LayoutCustom);
 }
 
 bool LookConfig::expert(bool b) {

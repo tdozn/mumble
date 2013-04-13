@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,13 +28,14 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "ConfigDialog.h"
+
 #include "AudioInput.h"
 #include "AudioOutput.h"
-#ifndef COMPAT_CLIENT
-#include "Overlay.h"
-#endif
 #include "Global.h"
+#include "Overlay.h"
 
 ConfigDialog::ConfigDialog(QWidget *p) : QDialog(p) {
 	setupUi(this);
@@ -75,9 +76,7 @@ ConfigDialog::ConfigDialog(QWidget *p) : QDialog(p) {
 	                              ));
 
 	if (! g.s.qbaConfigGeometry.isEmpty()) {
-#ifndef COMPAT_CLIENT
 		if (! g.ocIntercept)
-#endif
 			restoreGeometry(g.s.qbaConfigGeometry);
 	}
 }
@@ -133,6 +132,7 @@ void ConfigDialog::on_pageButtonBox_clicked(QAbstractButton *b) {
 	switch (pageButtonBox->standardButton(b)) {
 		case QDialogButtonBox::RestoreDefaults: {
 				Settings def;
+				def.bExpert = g.s.bExpert;
 				conf->load(def);
 				break;
 			}
@@ -229,9 +229,7 @@ void ConfigDialog::apply() {
 void ConfigDialog::accept() {
 	apply();
 
-#ifndef COMPAT_CLIENT
 	if (! g.ocIntercept)
-#endif
 		g.s.qbaConfigGeometry=saveGeometry();
 
 	QDialog::accept();

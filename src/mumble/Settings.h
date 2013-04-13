@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2009, Stefan Hacker <dd0t@users.sourceforge.net>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2009-2011, Stefan Hacker <dd0t@users.sourceforge.net>
 
    All rights reserved.
 
@@ -29,10 +29,19 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _SETTINGS_H
-#define _SETTINGS_H
+#ifndef SETTINGS_H_
+#define SETTINGS_H_
 
-#include "mumble_pch.hpp"
+#include <QtCore/QVariant>
+#include <QtCore/QList>
+#include <QtCore/QPair>
+#include <QtCore/QRectF>
+#include <QtCore/QSettings>
+#include <QtCore/QStringList>
+#include <QtGui/QColor>
+#include <QtGui/QFont>
+#include <QtNetwork/QSslCertificate>
+#include <QtNetwork/QSslKey>
 
 // Global helper classes to spread variables around across threads
 // especially helpfull to initialize things like the stored
@@ -76,7 +85,9 @@ Q_DECLARE_METATYPE(ShortcutTarget)
 struct OverlaySettings {
 	enum OverlayPresets { AvatarAndName, LargeSquareAvatar };
 
-	enum OverlayShow { Talking, HomeChannel, LinkedChannels };
+	enum OverlayShow { Talking, Active, HomeChannel, LinkedChannels };
+
+	enum OverlaySort { Alphabetical, LastStateChange };
 
 	bool bEnable;
 
@@ -84,6 +95,8 @@ struct OverlaySettings {
 
 	OverlayShow osShow;
 	bool bAlwaysSelf;
+	int uiActiveTime; // Time in seconds for a user to stay active after talking
+	OverlaySort osSort;
 
 	float fX;
 	float fY;
@@ -151,28 +164,35 @@ struct Settings {
 	enum ChannelDrag { Ask, DoNothing, Move };
 	enum ServerShow { ShowPopulated, ShowReachable, ShowAll };
 	enum TalkState { Passive, Talking, Whispering, Shouting };
+	enum IdleAction { Nothing, Deafen, Mute };
 	typedef QPair<QList<QSslCertificate>, QSslKey> KeyPair;
 
 	AudioTransmit atTransmit;
 	quint64 uiDoublePush;
+	quint64 uiPTTHold;
 
 	bool bExpert;
 
-	bool bPushClick;
+	bool bTxAudioCue;
 	static const QString cqsDefaultPushClickOn;
 	static const QString cqsDefaultPushClickOff;
-	QString qsPushClickOn;
-	QString qsPushClickOff;
+	QString qsTxAudioCueOn;
+	QString qsTxAudioCueOff;
 
 	bool bTransmitPosition;
 	bool bMute, bDeaf;
 	bool bTTS;
 	bool bUserTop;
 	bool bWhisperFriends;
+	bool bTTSMessageReadBack;
 	int iTTSVolume, iTTSThreshold;
 	int iQuality, iMinLoudness, iVoiceHold, iJitterBufferSize;
 	int iNoiseSuppress;
+
+	// Idle auto actions
 	unsigned int iIdleTime;
+	IdleAction iaeIdleAction;
+
 	VADSource vsVAD;
 	float fVADmin, fVADmax;
 	int iFramesPerPacket;
@@ -208,9 +228,12 @@ struct Settings {
 	int iLCDUserViewSplitterWidth;
 	QMap<QString, bool> qmLCDDevices;
 
+	bool bShortcutEnable;
+	bool bSuppressMacEventTapWarning;
 	QList<Shortcut> qlShortcuts;
 
 	enum MessageLog { LogNone = 0x00, LogConsole = 0x01, LogTTS = 0x02, LogBalloon = 0x04, LogSoundfile = 0x08};
+	int iMaxLogBlocks;
 	QMap<int, QString> qmMessageSounds;
 	QMap<int, quint32> qmMessages;
 
@@ -232,6 +255,7 @@ struct Settings {
 	bool bStateInTray;
 	bool bUsage;
 	bool bShowUserCount;
+	bool bChatBarUseSelection;
 	QByteArray qbaConnectDialogHeader, qbaConnectDialogGeometry;
 	bool bShowContextMenuInMenuBar;
 
@@ -242,7 +266,11 @@ struct Settings {
 	QString qsImagePath;
 
 	bool bUpdateCheck;
-	bool bPluginOverlayCheck;
+	bool bPluginCheck;
+
+	// PTT Button window
+	bool bShowPTTButtonWindow;
+	QByteArray qbaPTTButtonWindowGeometry;
 
 	// Network settings
 	enum ProxyType { NoProxy, HttpProxy, Socks5Proxy };
@@ -253,6 +281,7 @@ struct Settings {
 	ProxyType ptProxyType;
 	QString qsProxyHost, qsProxyUsername, qsProxyPassword;
 	unsigned short usProxyPort;
+	QString qsRegionalHost;
 
 	static const int ciDefaultMaxImageSize = 50 * 1024; // Restrict to 50KiB as a default
 	int iMaxImageSize;
@@ -271,6 +300,9 @@ struct Settings {
 	RecordingMode rmRecordingMode;
 	int iRecordingFormat;
 
+	// Codec kill-switch
+	bool bDisableCELT;
+
 	// Config updates
 	unsigned int uiUpdateCounter;
 
@@ -288,6 +320,4 @@ struct Settings {
 	void save();
 };
 
-#else
-struct Settings;
 #endif

@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,7 +28,10 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "ClientUser.h"
+
 #include "Channel.h"
 #include "Global.h"
 #include "AudioOutput.h"
@@ -39,13 +42,16 @@ QReadWriteLock ClientUser::c_qrwlUsers;
 QList<ClientUser *> ClientUser::c_qlTalking;
 QReadWriteLock ClientUser::c_qrwlTalking;
 
-ClientUser::ClientUser(QObject *p) : QObject(p) {
-	tsState = Settings::Passive;
-	bLocalMute = false;
-	fPowerMin = fPowerMax = 0.0f;
-	fAverageAvailable = 0.0f;
-	iFrames = 0;
-	iSequence = 0;
+ClientUser::ClientUser(QObject *p) : QObject(p),
+		tsState(Settings::Passive),
+		tLastTalkStateChange(false),
+		bLocalIgnore(false),
+		bLocalMute(false),
+		fPowerMin(0.0f),
+		fPowerMax(0.0f),
+		fAverageAvailable(0.0f),
+		iFrames(0),
+		iSequence(0) {
 }
 
 ClientUser *ClientUser::get(unsigned int uiSession) {
@@ -54,21 +60,19 @@ ClientUser *ClientUser::get(unsigned int uiSession) {
 	return p;
 }
 
-ClientUser *ClientUser::getByHash(const QString &hash) {
-	QReadLocker lock(&c_qrwlUsers);
-
-	ClientUser *cu;
-	foreach(cu, c_qmUsers) {
-		if (cu->qsHash == hash)
-			return cu;
-	}
-
-	return NULL;
-}
-
 QList<ClientUser *> ClientUser::getTalking() {
 	QReadLocker lock(&c_qrwlTalking);
 	return c_qlTalking;
+}
+
+QList<ClientUser *> ClientUser::getActive() {
+	QReadLocker lock(&c_qrwlUsers);
+	QList<ClientUser *> activeUsers;
+	foreach(ClientUser *cu, c_qmUsers) {
+		if (cu->isActive())
+			activeUsers << cu;
+	}
+	return activeUsers;
 }
 
 bool ClientUser::isValid(unsigned int uiSession) {
@@ -138,6 +142,8 @@ QString ClientUser::getFlagsString() const {
 		flags << ClientUser::tr("Muted (server)");
 	if (bDeaf)
 		flags << ClientUser::tr("Deafened (server)");
+	if (bLocalIgnore)
+		flags << ClientUser::tr("Local Ignore (Text messages)");
 	if (bLocalMute)
 		flags << ClientUser::tr("Local Mute");
 	if (bSelfMute)
@@ -159,6 +165,7 @@ void ClientUser::setTalking(Settings::TalkState ts) {
 		nstate = true;
 
 	tsState = ts;
+	tLastTalkStateChange.restart();
 	emit talkingChanged();
 
 	if (nstate && cChannel) {
@@ -183,6 +190,13 @@ void ClientUser::setSuppress(bool suppress) {
 	if (bSuppress == suppress)
 		return;
 	bSuppress = suppress;
+	emit muteDeafChanged();
+}
+
+void ClientUser::setLocalIgnore(bool ignore) {
+	if (bLocalIgnore == ignore)
+		return;
+	bLocalIgnore = ignore;
 	emit muteDeafChanged();
 }
 
@@ -229,6 +243,35 @@ void ClientUser::setRecording(bool recording) {
 }
 
 bool ClientUser::lessThanOverlay(const ClientUser *first, const ClientUser *second) {
+	if (g.s.os.osSort == OverlaySettings::LastStateChange) {
+		// Talkers above non-talkers
+		if (first->tsState != Settings::Passive && second->tsState == Settings::Passive)
+			return true;
+		if (first->tsState == Settings::Passive && second->tsState != Settings::Passive)
+			return false;
+
+		// Valid time above invalid time (possible when there wasn't a state-change yet)
+		if (first->tLastTalkStateChange.isStarted() && !second->tLastTalkStateChange.isStarted())
+			return true;
+		if (!first->tLastTalkStateChange.isStarted() && second->tLastTalkStateChange.isStarted())
+			return false;
+
+		// If both have a valid time
+		if (first->tLastTalkStateChange.isStarted() && second->tLastTalkStateChange.isStarted()) {
+			// Among talkers, long > short
+			// (if two clients are talking, the client that started first is above the other)
+			if (first->tsState != Settings::Passive && second->tsState != Settings::Passive)
+				return first->tLastTalkStateChange > second->tLastTalkStateChange;
+
+			// Among non-talkers, short -> long
+			// (if two clients are passive, the client that most recently stopped talking is above)
+			if (first->tsState == Settings::Passive && second->tsState == Settings::Passive)
+				return first->tLastTalkStateChange < second->tLastTalkStateChange;
+		}
+
+		// If both times are invalid, fall back to alphabetically (continuing below)
+	}
+
 	if (first->cChannel == second->cChannel || first->cChannel == NULL || second->cChannel == NULL)
 		return lessThan(first, second);
 
@@ -245,12 +288,20 @@ bool ClientUser::lessThanOverlay(const ClientUser *first, const ClientUser *seco
 	return Channel::lessThan(first->cChannel, second->cChannel);
 }
 
-
-
 void ClientUser::sortUsersOverlay(QList<ClientUser *> &list) {
 	QReadLocker lock(&c_qrwlUsers);
 
 	qSort(list.begin(), list.end(), ClientUser::lessThanOverlay);
+}
+
+bool ClientUser::isActive() {
+	if (tsState != Settings::Passive)
+		return true;
+
+	if (!tLastTalkStateChange.isStarted())
+		return false;
+
+	return tLastTalkStateChange.elapsed() < g.s.os.uiActiveTime * 1000000U;
 }
 
 /* From Channel.h

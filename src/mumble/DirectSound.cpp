@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,7 +28,10 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "DirectSound.h"
+
 #include "MainWindow.h"
 #include "Plugins.h"
 #include "User.h"
@@ -40,10 +43,7 @@
 // #define MY_DEFERRED DS3D_DEFERRED
 #define MY_DEFERRED DS3D_IMMEDIATE
 
-
 #define NBLOCKS 50
-#define MAX(a,b)        ( (a) > (b) ? (a) : (b) )
-#define MIN(a,b)        ( (a) < (b) ? (a) : (b) )
 
 class DXAudioOutputRegistrar : public AudioOutputRegistrar {
 	public:
@@ -68,6 +68,7 @@ class DirectSoundInit : public DeferInit {
 		DXAudioInputRegistrar *airReg;
 		DXAudioOutputRegistrar *aorReg;
 	public:
+		DirectSoundInit() : airReg(NULL), aorReg(NULL) {}
 		void initialize();
 		void destroy();
 };
@@ -224,10 +225,6 @@ void DXAudioOutput::run() {
 	LPDIRECTSOUNDBUFFER       pDSBOutput = NULL;
 	LPDIRECTSOUNDNOTIFY8       pDSNotify = NULL;
 
-	DWORD	dwBufferSize;
-	DWORD	dwLastWritePos;
-	DWORD	dwLastPlayPos;
-	DWORD	dwTotalPlayPos;
 	int iLastwriteblock;
 	LPVOID aptr1, aptr2;
 	DWORD nbytes1, nbytes2;
@@ -307,7 +304,7 @@ void DXAudioOutput::run() {
 	}
 
 	if (! g.s.doPositionalAudio())
-		dwMask = KSAUDIO_SPEAKER_MONO;
+		dwMask = KSAUDIO_SPEAKER_STEREO;
 
 	for (int i=0;i<32;i++) {
 		if (dwMask & (1 << i)) {
@@ -326,7 +323,7 @@ void DXAudioOutput::run() {
 
 	ZeroMemory(&wfx, sizeof(wfx));
 	wfx.Format.wFormatTag = WAVE_FORMAT_PCM;
-	wfx.Format.nChannels = qMax(ns, 1);
+	wfx.Format.nChannels = qMax(ns, 2);
 	wfx.Format.nSamplesPerSec = SAMPLE_RATE;
 	wfx.Format.nBlockAlign = sizeof(short) * wfx.Format.nChannels;
 	wfx.Format.nAvgBytesPerSec = wfx.Format.nSamplesPerSec * wfx.Format.nBlockAlign;
@@ -345,7 +342,7 @@ void DXAudioOutput::run() {
 
 	ZeroMemory(&wfx, sizeof(wfx));
 	wfx.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-	wfx.Format.nChannels = ns;
+	wfx.Format.nChannels = qMax(ns, 2);
 	wfx.Format.nSamplesPerSec = SAMPLE_RATE;
 	wfx.Format.nBlockAlign = sizeof(short) * wfx.Format.nChannels;
 	wfx.Format.nAvgBytesPerSec = wfx.Format.nSamplesPerSec * wfx.Format.nBlockAlign;
@@ -385,7 +382,6 @@ void DXAudioOutput::run() {
 		goto cleanup;
 	}
 
-	dwBufferSize = nbytes1 + nbytes2;
 	if (aptr1)
 		ZeroMemory(aptr1, nbytes1);
 	if (aptr2)
@@ -400,10 +396,6 @@ void DXAudioOutput::run() {
 		qWarning("DXAudioOutputUser: Play failed: hr=0x%08lx", hr);
 		goto cleanup;
 	}
-
-	dwLastWritePos = 0;
-	dwLastPlayPos = 0;
-	dwTotalPlayPos = 0;
 
 	iLastwriteblock = (NBLOCKS - 1 + g.s.iOutputDelay) % NBLOCKS;
 
@@ -491,8 +483,6 @@ void DXAudioInput::run() {
 
 	DWORD dwBufferSize;
 	bool bOk;
-	DWORD dwReadyBytes = 0;
-	DWORD dwLastReadPos = 0;
 	DWORD dwReadPosition;
 	DWORD dwCapturePosition;
 
@@ -510,9 +500,6 @@ void DXAudioInput::run() {
 	bOk = false;
 
 	bool failed = false;
-	float safety = 2.0f;
-	bool didsleep = false;
-	bool firstsleep = false;
 
 	Timer t;
 
@@ -561,9 +548,13 @@ void DXAudioInput::run() {
 	if (FAILED(hr = pDSCaptureBuffer->Start(DSCBSTART_LOOPING))) {
 		qWarning("DXAudioInput: Start failed: hr=0x%08lx", hr);
 	} else {
+		DWORD dwReadyBytes = 0;
+		DWORD dwLastReadPos = 0;
+		float safety = 2.0f;
+
 		while (bRunning) {
-			firstsleep = true;
-			didsleep = false;
+			bool firstsleep = true;
+			bool didsleep = false;
 
 			do {
 				if (FAILED(hr = pDSCaptureBuffer->GetCurrentPosition(&dwCapturePosition, &dwReadPosition))) {

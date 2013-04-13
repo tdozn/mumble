@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -28,10 +28,8 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _OVERLAYTEXT_H
-#define _OVERLAYTEXT_H
-
-#include "mumble_pch.hpp"
+#ifndef OVERLAYTEXT_H_
+#define OVERLAYTEXT_H_
 
 //! Annotated QPixmap supplying a basepoint.
 class BasepointPixmap : public QPixmap {

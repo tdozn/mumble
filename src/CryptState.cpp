@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
    All rights reserved.
 
@@ -37,7 +37,10 @@
  * OCB with something else or get yourself a license.
  */
 
+#include "murmur_pch.h"
+
 #include "CryptState.h"
+
 #include "Net.h"
 
 CryptState::CryptState() {

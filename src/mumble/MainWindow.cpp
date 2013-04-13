@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2009, Stefan Hacker <dd0t@users.sourceforge.net>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2009-2011, Stefan Hacker <dd0t@users.sourceforge.net>
 
    All rights reserved.
 
@@ -29,35 +29,42 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "mumble_pch.hpp"
+
 #include "MainWindow.h"
-#include "AudioWizard.h"
-#include "Cert.h"
-#include "AudioInput.h"
-#include "ConnectDialog.h"
-#include "User.h"
-#include "Channel.h"
-#include "ACLEditor.h"
-#include "BanEditor.h"
-#include "UserEdit.h"
-#include "Tokens.h"
-#include "Connection.h"
-#include "ServerHandler.h"
+
 #include "About.h"
-#include "GlobalShortcut.h"
-#include "VersionCheck.h"
-#include "UserModel.h"
-#include "AudioStats.h"
-#include "Plugins.h"
-#include "Log.h"
-#include "Overlay.h"
-#include "Global.h"
-#include "Database.h"
-#include "ViewCert.h"
-#include "TextMessage.h"
-#include "NetworkConfig.h"
 #include "ACL.h"
+#include "ACLEditor.h"
+#include "AudioInput.h"
+#include "AudioStats.h"
+#include "AudioWizard.h"
+#include "BanEditor.h"
+#include "CELTCodec.h"
+#include "Cert.h"
+#include "Channel.h"
+#include "Connection.h"
+#include "ConnectDialog.h"
+#include "Database.h"
+#include "Global.h"
+#include "GlobalShortcut.h"
+#include "Log.h"
+#include "Net.h"
+#include "NetworkConfig.h"
+#include "Overlay.h"
+#include "Plugins.h"
+#include "PTTButtonWidget.h"
+#include "ServerHandler.h"
+#include "TextMessage.h"
+#include "Tokens.h"
+#include "User.h"
+#include "UserEdit.h"
 #include "UserInformation.h"
+#include "UserModel.h"
+#include "VersionCheck.h"
+#include "ViewCert.h"
 #include "VoiceRecorderDialog.h"
+#include "../SignalCurry.h"
 
 #ifdef Q_OS_WIN
 #include "TaskList.h"
@@ -160,6 +167,10 @@ MainWindow::MainWindow(QWidget *p) : QMainWindow(p) {
 	// current open document (i.e. you can copy the open document anywhere
 	// simply by dragging this icon).
 	qApp->setWindowIcon(qiIcon);
+	
+	// Set the icon on the MainWindow directly. This fixes the icon not
+	// being set on the MainWindow in certain environments (Ex: GTK+).
+	setWindowIcon(qiIcon);
 #endif
 
 #ifdef Q_OS_WIN
@@ -177,13 +188,10 @@ MainWindow::MainWindow(QWidget *p) : QMainWindow(p) {
 
 	voiceRecorderDialog = NULL;
 
-#if QT_VERSION >= 0x040600
+	qwPTTButtonWidget = NULL;
+
 	cuContextUser = QWeakPointer<ClientUser>();
 	cContextChannel = QWeakPointer<Channel>();
-#else
-	cuContextUser = QPointer<ClientUser>();
-	cContextChannel = QPointer<Channel>();
-#endif
 
 	qtReconnect = new QTimer(this);
 	qtReconnect->setInterval(10000);
@@ -199,6 +207,7 @@ MainWindow::MainWindow(QWidget *p) : QMainWindow(p) {
 
 	connect(qmUser, SIGNAL(aboutToShow()), this, SLOT(qmUser_aboutToShow()));
 	connect(qmChannel, SIGNAL(aboutToShow()), this, SLOT(qmChannel_aboutToShow()));
+	connect(qteChat, SIGNAL(entered(QString)), this, SLOT(sendChatbarMessage(QString)));
 
 	// Fix context of all actions.
 	QList<QAction *> qla = findChildren<QAction *>();
@@ -272,6 +281,9 @@ void MainWindow::createActions() {
 	gsWhisper = new GlobalShortcut(this, idx++, tr("Whisper/Shout"), false, QVariant::fromValue(ShortcutTarget()));
 	gsWhisper->setObjectName(QLatin1String("gsWhisper"));
 
+	gsMetaLink=new GlobalShortcut(this, idx++, tr("Link Channel", "Global Shortcut"));
+	gsMetaLink->setObjectName(QLatin1String("MetaLink"));
+
 #ifndef Q_OS_MAC
 	qstiIcon->show();
 #endif
@@ -280,6 +292,7 @@ void MainWindow::createActions() {
 void MainWindow::setupGui()  {
 	setWindowTitle(tr("Mumble -- %1").arg(QLatin1String(MUMBLE_RELEASE)));
 	setCentralWidget(qtvUsers);
+	setAcceptDrops(true);
 
 #ifdef Q_OS_MAC
 	QMenu *qmWindow = new QMenu(tr("&Window"), this);
@@ -295,6 +308,7 @@ void MainWindow::setupGui()  {
 	LogDocument *ld = new LogDocument(qteLog);
 	qteLog->setDocument(ld);
 
+	qteLog->document()->setMaximumBlockCount(g.s.iMaxLogBlocks);
 	qteLog->document()->setDefaultStyleSheet(qApp->styleSheet());
 
 	pmModel = new UserModel(qtvUsers);
@@ -302,8 +316,6 @@ void MainWindow::setupGui()  {
 	qtvUsers->setRowHidden(0, QModelIndex(), true);
 	qtvUsers->ensurePolished();
 
-	qaServerConnect->setShortcuts(QKeySequence::Open);
-	qaServerDisconnect->setShortcuts(QKeySequence::Close);
 	qaAudioMute->setChecked(g.s.bMute);
 	qaAudioDeaf->setChecked(g.s.bDeaf);
 	qaAudioTTS->setChecked(g.s.bTTS);
@@ -329,6 +341,8 @@ void MainWindow::setupGui()  {
 	qdwChat->installEventFilter(dtbChatDockTitle);
 	qteChat->setDefaultText(tr("<center>Not connected</center>"), true);
 	qteChat->setEnabled(false);
+
+	setShowDockTitleBars(g.s.wlWindowLayout == Settings::LayoutCustom);
 
 #ifdef QT_MAC_USE_COCOA
 	// Workaround for QTBUG-3116 -- using a unified toolbar on Mac OS X
@@ -381,7 +395,15 @@ void MainWindow::setupGui()  {
 #endif
 }
 
+// Sets whether or not to show the title bars on the MainWindow's
+// dock widgets.
+void MainWindow::setShowDockTitleBars(bool doShow) {
+	dtbLogDockTitle->setEnabled(doShow);
+	dtbChatDockTitle->setEnabled(doShow);
+}
+
 MainWindow::~MainWindow() {
+	delete qwPTTButtonWidget;
 	delete qdwLog->titleBarWidget();
 	delete pmModel;
 	delete qtvUsers;
@@ -415,7 +437,8 @@ void MainWindow::closeEvent(QCloseEvent *e) {
 		mb.setEscapeButton(qpbMinimize);
 		mb.exec();
 		if (mb.clickedButton() != qpbClose) {
-			e->accept();
+			showMinimized();
+			e->ignore();
 			return;
 		}
 	}
@@ -431,6 +454,12 @@ void MainWindow::closeEvent(QCloseEvent *e) {
 		g.s.qbaMainWindowGeometry = saveGeometry();
 		g.s.qbaMainWindowState = saveState();
 		g.s.qbaHeaderState = qtvUsers->header()->saveState();
+	}
+
+	if (qwPTTButtonWidget) {
+		qwPTTButtonWidget->close();
+		qwPTTButtonWidget->deleteLater();
+		qwPTTButtonWidget = NULL;
 	}
 	g.bQuit = true;
 
@@ -452,6 +481,17 @@ void MainWindow::hideEvent(QHideEvent *e) {
 			QMetaObject::invokeMethod(this, "hide", Qt::QueuedConnection);
 	QMainWindow::hideEvent(e);
 #endif
+}
+
+void MainWindow::showEvent(QShowEvent *e) {
+#ifndef Q_OS_MAC
+#ifdef Q_OS_UNIX
+	if (! qApp->activeModalWidget() && ! qApp->activePopupWidget())
+#endif
+		if (g.s.bHideInTray && qstiIcon->isSystemTrayAvailable() && e->spontaneous())
+			QMetaObject::invokeMethod(this, "show", Qt::QueuedConnection);
+#endif
+	QMainWindow::showEvent(e);
 }
 
 void MainWindow::updateTrayIcon() {
@@ -507,7 +547,7 @@ bool MainWindow::handleSpecialContextMenu(const QUrl &url, const QPoint &pos_, b
 		bool ok = false;
 		QString x(url.host());
 		if (x.length() == 40) {
-			ClientUser *cu = ClientUser::getByHash(x);
+			ClientUser *cu = pmModel->getUser(x);
 			if (cu) {
 				cuContextUser = cu;
 				ok = true;
@@ -527,11 +567,7 @@ bool MainWindow::handleSpecialContextMenu(const QUrl &url, const QPoint &pos_, b
 				qmUser->exec(pos_, NULL);
 			}
 		}
-#if QT_VERSION >= 0x040600
 		cuContextUser.clear();
-#else
-		cuContextUser = NULL;
-#endif
 	} else if (url.scheme() == QString::fromLatin1("channelid")) {
 		bool ok;
 		QByteArray qbaServerDigest = QByteArray::fromBase64(url.path().remove(0, 1).toLatin1());
@@ -547,11 +583,7 @@ bool MainWindow::handleSpecialContextMenu(const QUrl &url, const QPoint &pos_, b
 				qmChannel->exec(pos_, NULL);
 			}
 		}
-#if QT_VERSION >= 0x040600
 		cContextChannel.clear();
-#else
-		cContextChannel = NULL;
-#endif
 	} else {
 		return false;
 	}
@@ -568,29 +600,13 @@ void MainWindow::on_qtvUsers_customContextMenuRequested(const QPoint &mpos) {
 
 	qpContextPosition = mpos;
 	if (p) {
-#if QT_VERSION >= 0x040600
 		cuContextUser.clear();
-#else
-		cuContextUser = NULL;
-#endif
 		qmUser->exec(qtvUsers->mapToGlobal(mpos), qaUserMute);
-#if QT_VERSION >= 0x040600
 		cuContextUser.clear();
-#else
-		cuContextUser = NULL;
-#endif
 	} else {
-#if QT_VERSION >= 0x040600
 		cContextChannel.clear();
-#else
-		cContextChannel = NULL;
-#endif
 		qmChannel->exec(qtvUsers->mapToGlobal(mpos), NULL);
-#if QT_VERSION >= 0x040600
 		cContextChannel.clear();
-#else
-		cContextChannel = NULL;
-#endif
 	}
 	qpContextPosition = QPoint();
 }
@@ -604,12 +620,8 @@ void MainWindow::on_qteLog_customContextMenuRequested(const QPoint &mpos) {
 			return;
 	}
 
-#if QT_VERSION >= 0x040400
 	QPoint contentPosition = QPoint(QApplication::isRightToLeft() ? (qteLog->horizontalScrollBar()->maximum() - qteLog->horizontalScrollBar()->value()) : qteLog->horizontalScrollBar()->value(), qteLog->verticalScrollBar()->value());
 	QMenu *menu = qteLog->createStandardContextMenu(mpos + contentPosition);
-#else
-	QMenu *menu = qteLog->createStandardContextMenu();
-#endif
 	menu->addSeparator();
 	menu->addAction(tr("Clear"), qteLog, SLOT(clear(void)));
 	menu->exec(qteLog->mapToGlobal(mpos));
@@ -648,9 +660,7 @@ void MainWindow::openUrl(const QUrl &url) {
 		f.close();
 
 		QSettings *qs = new QSettings(f.fileName(), QSettings::IniFormat);
-#if QT_VERSION >= 0x040500
 		qs->setIniCodec("UTF-8");
-#endif
 		if (qs->status() != QSettings::NoError) {
 			g.l->log(Log::Warning, tr("File is not a configuration file."));
 		} else {
@@ -669,26 +679,28 @@ void MainWindow::openUrl(const QUrl &url) {
 	}
 
 	int major, minor, patch;
+	int thismajor, thisminor, thispatch;
+	MumbleVersion::get(&thismajor, &thisminor, &thispatch);
+
+	// With no version parameter given assume the link refers to our version
 	major = 1;
-	minor = 1;
+	minor = 2;
 	patch = 0;
 
 	QString version = url.queryItemValue(QLatin1String("version"));
 	MumbleVersion::get(&major, &minor, &patch, version);
 
-#ifdef Q_OS_MAC
-	if ((major == 1) && (minor == 1)) {
-		launchCompatibilityClient(url);
+	if ((major < 1) || // No pre 1.2.0
+	        (major == 1 && minor <= 1) ||
+	        (major > thismajor) || // No future version
+	        (major == thismajor && minor > thisminor) ||
+	        (major == thismajor && minor == thisminor && patch > thispatch)) {
+		g.l->log(Log::Warning, tr("This version of Mumble can't handle URLs for Mumble version %1.%2.%3").arg(major).arg(minor).arg(patch));
 		return;
-	} else
-#endif
-		if ((major != 1) || (minor != 2) || (patch > 3)) {
-			g.l->log(Log::Warning, tr("This version of Mumble can't handle URLs for Mumble version %1.%2.%3").arg(major).arg(minor).arg(patch));
-			return;
-		}
+	}
 
 	QString host = url.host();
-	unsigned short port = static_cast<unsigned short>(url.port(64738));
+	unsigned short port = static_cast<unsigned short>(url.port(DEFAULT_MUMBLE_PORT));
 	QString user = url.userName();
 	QString pw = url.password();
 	qsDesiredChannel = url.path();
@@ -888,6 +900,22 @@ void MainWindow::setupView(bool toggle_minimize) {
 
 	show();
 	activateWindow();
+
+	// If activated show the PTT window
+	if (g.s.bShowPTTButtonWindow && g.s.atTransmit == Settings::PushToTalk) {
+		if (qwPTTButtonWidget) {
+			qwPTTButtonWidget->show();
+		} else {
+			qwPTTButtonWidget = new PTTButtonWidget();
+			qwPTTButtonWidget->show();
+			connect(qwPTTButtonWidget, SIGNAL(triggered(bool,QVariant)), SLOT(on_PushToTalk_triggered(bool,QVariant)));
+		}
+	} else {
+		if (qwPTTButtonWidget) {
+			qwPTTButtonWidget->deleteLater();
+			qwPTTButtonWidget = NULL;
+		}
+	}
 }
 
 void MainWindow::on_qaServerConnect_triggered(bool autoconnect) {
@@ -1008,8 +1036,10 @@ void MainWindow::on_qmServer_aboutToShow() {
 }
 
 void MainWindow::on_qaServerDisconnect_triggered() {
-	if (qtReconnect->isActive())
+	if (qtReconnect->isActive()) {
 		qtReconnect->stop();
+		qaServerDisconnect->setEnabled(false);
+	}
 	if (g.sh && g.sh->isRunning())
 		g.sh->disconnect();
 }
@@ -1034,6 +1064,18 @@ void MainWindow::on_qaServerUserList_triggered() {
 	}
 }
 
+static const QString currentCodec() {
+	if (g.bOpus)
+		return QLatin1String("Opus");
+
+	int v = g.bPreferAlpha ? g.iCodecAlpha : g.iCodecBeta;
+	CELTCodec* cc = g.qmCodecs.value(v);
+	if (cc)
+		return QString::fromLatin1("CELT %1").arg(cc->version());
+	else
+		return QString::fromLatin1("CELT %1").arg(QString::number(v, 16));
+}
+
 void MainWindow::on_qaServerInformation_triggered() {
 	ConnectionPtr c = g.sh->cConnection;
 
@@ -1043,10 +1085,7 @@ void MainWindow::on_qaServerInformation_triggered() {
 	CryptState &cs = c->csCrypt;
 	QSslCipher qsc = g.sh->qscCipher;
 
-	unsigned int version = g.sh->uiVersion;
-	QString qsVersion=tr("<h2>Version</h2><p>Protocol %1.%2.%3.</p>").arg(QString::number((version >> 16) & 0xFF),
-	                  QString::number((version >> 8) & 0xFF),
-	                  QString::number(version & 0xFF));
+	QString qsVersion=tr("<h2>Version</h2><p>Protocol %1.</p>").arg(MumbleVersion::toString(g.sh->uiVersion));
 
 	if (g.sh->qsRelease.isEmpty() || g.sh->qsOS.isEmpty() || g.sh->qsOSVersion.isEmpty()) {
 		qsVersion.append(tr("<p>No build information or OS version available.</p>"));
@@ -1082,7 +1121,7 @@ void MainWindow::on_qaServerInformation_triggered() {
 		          .arg(cs.uiRemoteGood).arg(cs.uiRemoteLate).arg(cs.uiRemoteLost).arg(cs.uiRemoteResync)
 		          .arg(cs.uiGood).arg(cs.uiLate).arg(cs.uiLost).arg(cs.uiResync);
 	}
-	qsAudio=tr("<h2>Audio bandwidth</h2><p>Maximum %1 kbit/s<br />Current %2 kbit/s</p>").arg(g.iMaxBandwidth / 1000.0,0,'f',1).arg(g.iAudioBandwidth / 1000.0,0,'f',1);
+	qsAudio=tr("<h2>Audio bandwidth</h2><p>Maximum %1 kbit/s<br />Current %2 kbit/s<br />Codec: %3</p>").arg(g.iMaxBandwidth / 1000.0,0,'f',1).arg(g.iAudioBandwidth / 1000.0,0,'f',1).arg(currentCodec());
 
 	QMessageBox qmb(QMessageBox::Information, tr("Mumble Server Information"), qsVersion + qsControl + qsVoice + qsCrypt + qsAudio, QMessageBox::Ok, this);
 	qmb.setDefaultButton(QMessageBox::Ok);
@@ -1159,6 +1198,7 @@ void MainWindow::qmUser_aboutToShow() {
 	if (g.sh && g.sh->uiVersion >= 0x010203)
 		qmUser->addAction(qaUserPrioritySpeaker);
 	qmUser->addAction(qaUserLocalMute);
+	qmUser->addAction(qaUserLocalIgnore);
 
 	if (self)
 		qmUser->addAction(qaSelfComment);
@@ -1214,6 +1254,7 @@ void MainWindow::qmUser_aboutToShow() {
 		qaUserBan->setEnabled(false);
 		qaUserTextMessage->setEnabled(false);
 		qaUserLocalMute->setEnabled(false);
+		qaUserLocalIgnore->setEnabled(false);
 		qaUserCommentReset->setEnabled(false);
 		qaUserCommentView->setEnabled(false);
 	} else {
@@ -1221,6 +1262,7 @@ void MainWindow::qmUser_aboutToShow() {
 		qaUserBan->setEnabled(! self);
 		qaUserTextMessage->setEnabled(true);
 		qaUserLocalMute->setEnabled(! self);
+		qaUserLocalIgnore->setEnabled(! self);
 		qaUserCommentReset->setEnabled(! p->qbaCommentHash.isEmpty() && (g.pPermissions & (ChanACL::Move | ChanACL::Write)));
 		qaUserCommentView->setEnabled(! p->qbaCommentHash.isEmpty());
 
@@ -1228,6 +1270,7 @@ void MainWindow::qmUser_aboutToShow() {
 		qaUserDeaf->setChecked(p->bDeaf);
 		qaUserPrioritySpeaker->setChecked(p->bPrioritySpeaker);
 		qaUserLocalMute->setChecked(p->bLocalMute);
+		qaUserLocalIgnore->setChecked(p->bLocalIgnore);
 	}
 	updateMenuPermissions();
 }
@@ -1260,6 +1303,18 @@ void MainWindow::on_qaUserLocalMute_triggered() {
 	p->setLocalMute(muted);
 	if (! p->qsHash.isEmpty())
 		Database::setLocalMuted(p->qsHash, muted);
+}
+
+void MainWindow::on_qaUserLocalIgnore_triggered() {
+	ClientUser *p = getContextMenuUser();
+	if (!p)
+		return;
+
+	bool ignored = qaUserLocalIgnore->isChecked();
+
+	p->setLocalIgnore(ignored);
+	if (! p->qsHash.isEmpty())
+		Database::setLocalIgnored(p->qsHash, ignored);
 }
 
 void MainWindow::on_qaUserDeaf_triggered() {
@@ -1409,11 +1464,7 @@ void MainWindow::openTextMessageDialog(ClientUser *p) {
 void MainWindow::on_qaUserCommentView_triggered() {
 	ClientUser *p = getContextMenuUser();
 	// This has to be done here because UserModel could've set it.
-#if QT_VERSION >= 0x040600
 	cuContextUser.clear();
-#else
-	cuContextUser = NULL;
-#endif
 
 	if (!p)
 		return;
@@ -1428,6 +1479,8 @@ void MainWindow::on_qaUserCommentView_triggered() {
 			return;
 		}
 	}
+
+	pmModel->seenComment(pmModel->index(p));
 
 	::TextMessage *texm = new ::TextMessage(this, tr("View comment on user %1").arg(p->qsName));
 
@@ -1466,21 +1519,18 @@ void MainWindow::on_qaQuit_triggered() {
 	this->close();
 }
 
-void MainWindow::sendChatbarMessage() {
-	if (qteChat->toPlainText().isEmpty() || g.uiSession == 0) return; // Check if text & connection is available
+void MainWindow::sendChatbarMessage(QString qsText) {
+	if (g.uiSession == 0) return; // Check if text & connection is available
 
 	ClientUser *p = pmModel->getUser(qtvUsers->currentIndex());
 	Channel *c = pmModel->getChannel(qtvUsers->currentIndex());
 
-	QString qsText;
-
-	qsText = qteChat->toPlainText();
 	qsText = Qt::escape(qsText);
 	qsText = TextMessage::autoFormat(qsText);
 
-	if (p == NULL || p->uiSession == g.uiSession) {
+	if (!g.s.bChatBarUseSelection || p == NULL || p->uiSession == g.uiSession) {
 		// Channel message
-		if (c == NULL) // If no channel selected fallback to current one
+		if (!g.s.bChatBarUseSelection || c == NULL) // If no channel selected fallback to current one
 			c = ClientUser::get(g.uiSession)->cChannel;
 
 		g.sh->sendChannelTextMessage(c->iId, qsText, false);
@@ -1553,6 +1603,7 @@ void MainWindow::qmChannel_aboutToShow() {
 	qmChannel->addAction(qaChannelUnlink);
 	qmChannel->addAction(qaChannelUnlinkAll);
 	qmChannel->addSeparator();
+	qmChannel->addAction(qaChannelCopyURL);
 	qmChannel->addAction(qaChannelSendMessage);
 
 #ifndef Q_OS_MAC
@@ -1725,6 +1776,25 @@ void MainWindow::on_qaChannelSendMessage_triggered() {
 	delete texm;
 }
 
+void MainWindow::on_qaChannelCopyURL_triggered() {
+	Channel *c = getContextMenuChannel();
+	QString host, uname, pw, channel;
+	unsigned short port;
+
+	if (!c)
+		return;
+
+	g.sh->getConnectionInfo(host, port, uname, pw);
+	// walk back up the channel list to build the URL.
+	while (c->cParent != NULL) {
+		channel.prepend(c->qsName);
+		channel.prepend(QLatin1String("/"));
+		c = c->cParent;
+	}
+
+	QApplication::clipboard()->setMimeData(ServerItem::toMimeData(c->qsName, host, port, channel), QClipboard::Clipboard);
+}
+
 void MainWindow::updateMenuPermissions() {
 	ClientUser *cu = NULL;
 	Channel *c = NULL;
@@ -1739,7 +1809,7 @@ void MainWindow::updateMenuPermissions() {
 			c = pmModel->getChannel(qtvUsers->currentIndex());
 	}
 
-	ChanACL::Permissions p = static_cast<ChanACL::Permissions>(c ? c->uiPermissions : ChanACL::None);
+	ChanACL::Permissions p = c ? static_cast<ChanACL::Permissions>(c->uiPermissions) : ChanACL::None;
 
 	if (c && ! p) {
 		g.sh->requestChannelPermissions(c->iId);
@@ -1752,7 +1822,7 @@ void MainWindow::updateMenuPermissions() {
 	}
 
 	Channel *cparent = c ? c->cParent : NULL;
-	ChanACL::Permissions pparent = static_cast<ChanACL::Permissions>(cparent ? cparent->uiPermissions : ChanACL::None);
+	ChanACL::Permissions pparent = cparent ? static_cast<ChanACL::Permissions>(cparent->uiPermissions) : ChanACL::None;
 
 	if (cparent && ! pparent) {
 		g.sh->requestChannelPermissions(cparent->iId);
@@ -1766,7 +1836,7 @@ void MainWindow::updateMenuPermissions() {
 
 	ClientUser *user = g.uiSession ? ClientUser::get(g.uiSession) : NULL;
 	Channel *homec = user ? user->cChannel : NULL;
-	ChanACL::Permissions homep = static_cast<ChanACL::Permissions>(homec ? homec->uiPermissions : ChanACL::None);
+	ChanACL::Permissions homep = homec ? static_cast<ChanACL::Permissions>(homec->uiPermissions) : ChanACL::None;
 
 	if (homec && ! homep) {
 		g.sh->requestChannelPermissions(homec->iId);
@@ -1976,11 +2046,6 @@ void MainWindow::on_qaHelpAbout_triggered() {
 	adAbout.exec();
 }
 
-void MainWindow::on_qaHelpAboutSpeex_triggered() {
-	AboutSpeexDialog adAbout(this);
-	adAbout.exec();
-}
-
 void MainWindow::on_qaHelpAboutQt_triggered() {
 	QMessageBox::aboutQt(this, tr("About Qt"));
 }
@@ -2018,7 +2083,13 @@ void MainWindow::on_PushToTalk_triggered(bool down, QVariant) {
 	if (down) {
 		g.uiDoublePush = g.tDoublePush.restart();
 		g.iPushToTalk++;
-	} else if (g.iPushToTalk) {
+	} else if (g.iPushToTalk > 0) {
+		QTimer::singleShot(g.s.uiPTTHold, this, SLOT(pttReleased()));
+	}
+}
+
+void MainWindow::pttReleased() {
+	if (g.iPushToTalk > 0) {
 		g.iPushToTalk--;
 	}
 }
@@ -2051,17 +2122,20 @@ Channel *MainWindow::mapChannel(int idx) const {
 
 	if (idx < 0) {
 		switch (idx) {
-			case -1:
+			case SHORTCUT_TARGET_ROOT:
 				c = Channel::get(0);
 				break;
-			case -2:
-			case -3:
+			case SHORTCUT_TARGET_PARENT:
+			case SHORTCUT_TARGET_CURRENT:
 				c = ClientUser::get(g.uiSession)->cChannel;
-				if (idx == -2)
+				if (idx == SHORTCUT_TARGET_PARENT)
 					c = c->cParent;
 				break;
 			default:
-				c = pmModel->getSubChannel(ClientUser::get(g.uiSession)->cChannel, -4 - idx);
+				if(idx <= SHORTCUT_TARGET_PARENT_SUBCHANNEL)
+					c = pmModel->getSubChannel(ClientUser::get(g.uiSession)->cChannel->cParent, SHORTCUT_TARGET_PARENT_SUBCHANNEL - idx);
+				else
+					c = pmModel->getSubChannel(ClientUser::get(g.uiSession)->cChannel, SHORTCUT_TARGET_SUBCHANNEL - idx);
 				break;
 		}
 	} else {
@@ -2180,16 +2254,50 @@ void MainWindow::on_gsWhisper_triggered(bool down, QVariant scdata) {
 			}
 		}
 
+		if (gsMetaLink->active()) {
+			if (! st.bUsers) {
+				Channel *c = ClientUser::get(g.uiSession)->cChannel;
+				Channel *l = mapChannel(st.iChannel);
+				if (l) {
+					if (c->qsPermLinks.contains(l)) {
+						g.sh->removeChannelLink(c->iId, l->iId);
+					} else {
+						g.sh->addChannelLink(c->iId, l->iId);
+					}
+				}
+				return;
+			}
+		}
+
 		qsCurrentTargets.insert(st);
 		updateTarget();
 
 		g.iPushToTalk++;
-	} else if (g.iPushToTalk) {
-		g.iPushToTalk--;
-
-		qsCurrentTargets.remove(st);
-		updateTarget();
+	} else if (g.iPushToTalk > 0) {
+		SignalCurry *fwd = new SignalCurry(scdata, true, this);
+		connect(fwd, SIGNAL(called(QVariant)), SLOT(whisperReleased(QVariant)));
+		QTimer::singleShot(g.s.uiPTTHold, fwd, SLOT(call()));
 	}
+}
+
+void MainWindow::whisperReleased(QVariant scdata) {
+	if (g.iPushToTalk <= 0)
+		return;
+
+	ShortcutTarget st = scdata.value<ShortcutTarget>();
+
+	g.iPushToTalk--;
+
+	qsCurrentTargets.remove(st);
+	updateTarget();
+}
+
+void MainWindow::onResetAudio()
+{
+	qWarning("MainWindow: Start audio reset");
+	Audio::stop();
+	Audio::start();
+	qWarning("MainWindow: Audio reset complete");
 }
 
 void MainWindow::viewCertificate(bool) {
@@ -2202,6 +2310,11 @@ void MainWindow::serverConnected() {
 	g.pPermissions = ChanACL::None;
 	g.iCodecAlpha = 0x8000000b;
 	g.bPreferAlpha = true;
+#ifdef USE_OPUS
+	g.bOpus = true;
+#else
+	g.bOpus = false;
+#endif
 	g.iCodecBeta = 0;
 
 	g.l->clearIgnore();
@@ -2369,37 +2482,10 @@ void MainWindow::serverDisconnected(QAbstractSocket::SocketError err, QString re
 			}
 		}
 	} else if (err == QAbstractSocket::SslHandshakeFailedError) {
-		if (QMessageBox::warning(this, tr("SSL Version mismatch"), tr("This server is using an older encryption standard. It might be an older 1.1 based Mumble server.<br />Would you like to launch the compatibility client to connect to it?"), QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes) == QMessageBox::Yes) {
-
-			QString host, user, pw;
-			unsigned short port;
-			QUrl url;
-
-			g.sh->getConnectionInfo(host, port, user, pw);
-			url.setScheme(QLatin1String("mumble"));
-			url.setHost(host);
-			url.setPort(port);
-			url.setUserName(user);
-			url.addQueryItem(QLatin1String("version"), QLatin1String("1.1.8"));
-
-#ifdef USE_DBUS
-			QDBusInterface qdbi(QLatin1String("net.sourceforge.mumble.mumble11x"), QLatin1String("/"), QLatin1String("net.sourceforge.mumble.Mumble"));
-
-			QDBusMessage reply=qdbi.call(QLatin1String("openUrl"), QLatin1String(url.toEncoded()));
-			if (reply.type() == QDBusMessage::ReplyMessage) {
-				this->close();
-				return;
-			} else
-#endif
-			{
-				if (launchCompatibilityClient(url))
-					return;
-			}
-			QMessageBox::critical(this, tr("Failed to launch compatibility client"), tr("The compatibility client could not be found, or failed to start.<br />Note that the compatibility client is an optional component for most installations, and might not be installed."), QMessageBox::Ok, QMessageBox::Ok);
-		}
+		QMessageBox::warning(this, tr("SSL Version mismatch"), tr("This server is using an older encryption standard, and is no longer supported by modern versions of Mumble."), QMessageBox::Ok);
 	} else {
 		bool ok = false;
-		bool matched = false;
+
 
 		if (! reason.isEmpty()) {
 			g.l->log(Log::ServerDisconnected, tr("Server connection failed: %1.").arg(reason));
@@ -2412,18 +2498,34 @@ void MainWindow::serverDisconnected(QAbstractSocket::SocketError err, QString re
 		wf = Qt::Sheet;
 #endif
 
+		bool matched = true;
 		switch (rtLast) {
 			case MumbleProto::Reject_RejectType_InvalidUsername:
+				uname = QInputDialog::getText(this, tr("Invalid username"),
+				                              tr("You connected with an invalid username, please try another one."),
+				                              QLineEdit::Normal, uname, &ok, wf);
+				break;
 			case MumbleProto::Reject_RejectType_UsernameInUse:
-				matched = true;
-				uname = QInputDialog::getText(this, tr("Invalid username"), (rtLast == MumbleProto::Reject_RejectType_InvalidUsername) ? tr("You connected with an invalid username, please try another one.") : tr("That username is already in use, please try another username."), QLineEdit::Normal, uname, &ok, wf);
+				uname = QInputDialog::getText(this, tr("Username in use"),
+				                              tr("That username is already in use, please try another username."),
+				                              QLineEdit::Normal, uname, &ok, wf);
 				break;
 			case MumbleProto::Reject_RejectType_WrongUserPW:
+				pw = QInputDialog::getText(this,
+				                           tr("Wrong certificate or password"),
+				                           tr("Wrong certificate or password for registered user. If you are\n"
+				                              "certain this user is protected by a password please retry.\n"
+				                              "Otherwise abort and check your certificate and username."),
+				                           QLineEdit::Password, pw, &ok, wf);
+				break;
 			case MumbleProto::Reject_RejectType_WrongServerPW:
-				matched = true;
-				pw = QInputDialog::getText(this, tr("Wrong password"), (rtLast == MumbleProto::Reject_RejectType_WrongUserPW) ? tr("Wrong password for registered users, please try again.") : tr("Wrong server password for unregistered user account, please try again."), QLineEdit::Password, pw, &ok, wf);
+				pw = QInputDialog::getText(this,
+				                           tr("Wrong password"),
+				                           tr("Wrong server password for unregistered user account, please try again."),
+				                           QLineEdit::Password, pw, &ok, wf);
 				break;
 			default:
+				matched = false;
 				break;
 		}
 		if (ok && matched) {
@@ -2474,6 +2576,13 @@ void MainWindow::trayAboutToShow() {
 	}
 }
 
+void MainWindow::on_Icon_messageClicked() {
+	if (isMinimized())
+		setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+	show();
+	raise();
+	activateWindow();
+}
 
 void MainWindow::on_Icon_activated(QSystemTrayIcon::ActivationReason reason) {
 	// FIXME: Workaround for activated sending both doubleclick and trigger
@@ -2512,14 +2621,18 @@ void MainWindow::on_Icon_activated(QSystemTrayIcon::ActivationReason reason) {
 }
 
 void MainWindow::qtvUserCurrentChanged(const QModelIndex &, const QModelIndex &) {
+	updateChatBar();
+}
+
+void MainWindow::updateChatBar() {
 	User *p = pmModel->getUser(qtvUsers->currentIndex());
 	Channel *c = pmModel->getChannel(qtvUsers->currentIndex());
 
 	if (g.uiSession == 0) {
 		qteChat->setDefaultText(tr("<center>Not connected</center>"), true);
-	} else if (p == NULL || p->uiSession == g.uiSession) {
+	} else if (!g.s.bChatBarUseSelection || p == NULL || p->uiSession == g.uiSession) {
 		// Channel tree target
-		if (c == NULL) // If no channel selected fallback to current one
+		if (!g.s.bChatBarUseSelection || c == NULL) // If no channel selected fallback to current one
 			c = ClientUser::get(g.uiSession)->cChannel;
 
 		qteChat->setDefaultText(tr("<center>Type message to channel '%1' here</center>").arg(c->qsName));
@@ -2664,59 +2777,6 @@ QPair<QByteArray, QImage> MainWindow::openImageFile() {
 	return retval;
 }
 
-bool MainWindow::launchCompatibilityClient(const QUrl &url) {
-	Audio::stop();
-
-#ifdef Q_OS_MAC
-	FSRef fref;
-	OSStatus err;
-
-	err = LSFindApplicationForInfo(kLSUnknownCreator, CFSTR("net.sourceforge.mumble.Mumble11x"), CFSTR("Mumble11x.app"), &fref, NULL);
-	if (err == noErr) {
-		CFMutableArrayRef arguments = CFArrayCreateMutable(kCFAllocatorDefault, 2, &kCFTypeArrayCallBacks);
-		if (arguments) {
-			CFArrayAppendValue(arguments, CFSTR("Mumble11x"));
-			QString qsUrlString = url.toString();
-			CFStringRef urlString = CFStringCreateWithCharacters(kCFAllocatorDefault, reinterpret_cast<const UniChar *>(qsUrlString.unicode()), qsUrlString.length());
-			CFArrayAppendValue(arguments, urlString);
-			CFRelease(urlString);
-		}
-
-		LSApplicationParameters parm;
-		memset(&parm, 0, sizeof(LSApplicationParameters));
-		parm.flags = kLSLaunchDefaults;
-		parm.application = &fref;
-		parm.argv = arguments;
-		err = LSOpenApplication(&parm, NULL);
-
-		CFRelease(arguments);
-
-		if (err == noErr) {
-			this->close();
-			return true;
-		}
-	}
-#else
-	QString executable = QApplication::instance()->applicationFilePath();
-	int idx = executable.lastIndexOf(QLatin1String("mumble"));
-	if (idx >= 0) {
-		QStringList args;
-		args << url.toString();
-
-		executable.replace(idx, 6, QLatin1String("mumble11x"));
-		if (QProcess::startDetached(executable, args)) {
-			g.mw->bSuppressAskOnQuit = true;
-			qApp->closeAllWindows();
-		}
-		return true;
-	}
-#endif
-
-	Audio::start();
-
-	return false;
-}
-
 void MainWindow::destroyUserInformation() {
 	UserInformation *ui = static_cast<UserInformation *>(sender());
 	QMap<unsigned int, UserInformation *>::iterator i;
@@ -2727,3 +2787,4 @@ void MainWindow::destroyUserInformation() {
 		}
 	}
 }
+

@@ -1,5 +1,5 @@
-/* Copyright (C) 2005-2010, Thorvald Natvig <thorvald@natvig.com>
-   Copyright (C) 2009, Stefan Hacker <dd0t@users.sourceforge.net>
+/* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
+   Copyright (C) 2009-2011, Stefan Hacker <dd0t@users.sourceforge.net>
 
    All rights reserved.
 
@@ -29,29 +29,31 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "MainWindow.h"
-#include "AudioWizard.h"
-#include "AudioInput.h"
-#include "ConnectDialog.h"
-#include "User.h"
-#include "Channel.h"
-#include "ACLEditor.h"
-#include "BanEditor.h"
-#include "UserEdit.h"
-#include "Connection.h"
-#include "ServerHandler.h"
+#include "mumble_pch.hpp"
+
 #include "About.h"
-#include "GlobalShortcut.h"
-#include "VersionCheck.h"
-#include "UserModel.h"
+#include "ACLEditor.h"
+#include "AudioInput.h"
 #include "AudioStats.h"
-#include "Plugins.h"
-#include "Log.h"
-#include "Overlay.h"
-#include "Global.h"
+#include "AudioWizard.h"
+#include "BanEditor.h"
+#include "Channel.h"
+#include "Connection.h"
+#include "ConnectDialog.h"
 #include "Database.h"
-#include "ViewCert.h"
+#include "Global.h"
+#include "GlobalShortcut.h"
+#include "Log.h"
+#include "MainWindow.h"
+#include "Overlay.h"
+#include "Plugins.h"
+#include "ServerHandler.h"
+#include "User.h"
+#include "UserEdit.h"
 #include "UserInformation.h"
+#include "UserModel.h"
+#include "VersionCheck.h"
+#include "ViewCert.h"
 
 #define ACTOR_INIT \
 	ClientUser *pSrc=NULL; \
@@ -85,11 +87,33 @@ void MainWindow::msgBanList(const MumbleProto::BanList &msg) {
 
 void MainWindow::msgReject(const MumbleProto::Reject &msg) {
 	rtLast = msg.type();
-	g.l->log(Log::ServerDisconnected, tr("Server connection rejected: %1.").arg(u8(msg.reason())));
+
+	QString reason(u8(msg.reason()));;
+
+	switch (rtLast) {
+		case MumbleProto::Reject_RejectType_InvalidUsername:
+			reason = tr("Invalid username");
+			break;
+		case MumbleProto::Reject_RejectType_UsernameInUse:
+			reason = tr("Username in use");
+			break;
+		case MumbleProto::Reject_RejectType_WrongUserPW:
+			reason = tr("Wrong certificate or password");
+			break;
+		case MumbleProto::Reject_RejectType_WrongServerPW:
+			reason = tr("Wrong password");
+			break;
+		default:
+			break;
+	}
+
+	g.l->log(Log::ServerDisconnected, tr("Server connection rejected: %1.").arg(reason));
 	g.l->setIgnore(Log::ServerDisconnected, 1);
 }
 
 void MainWindow::msgServerSync(const MumbleProto::ServerSync &msg) {
+	g.sh->sendPing(); // Send initial ping to establish UDP connection
+
 	g.uiSession = msg.session();
 	g.pPermissions = static_cast<ChanACL::Permissions>(msg.permissions());
 	g.l->clearIgnore();
@@ -224,6 +248,10 @@ void MainWindow::msgPermissionDenied(const MumbleProto::PermissionDenied &msg) {
 				g.l->log(Log::PermissionDenied, tr("Channel is full."));
 			}
 			break;
+		case MumbleProto::PermissionDenied_DenyType_NestingLimit: {
+				g.l->log(Log::PermissionDenied, tr("Channel nesting limit reached."));
+			}
+			break;
 		default: {
 				if (msg.has_reason())
 					g.l->log(Log::PermissionDenied, tr("Denied: %1.").arg(u8(msg.reason())));
@@ -262,6 +290,8 @@ void MainWindow::msgUserState(const MumbleProto::UserState &msg) {
 			pmModel->setFriendName(pDst, name);
 		if (Database::isLocalMuted(pDst->qsHash))
 			pDst->setLocalMute(true);
+		if (Database::isLocalIgnored(pDst->qsHash))
+			pDst->setLocalIgnore(true);
 	}
 
 	if (bNewUser)
@@ -295,7 +325,7 @@ void MainWindow::msgUserState(const MumbleProto::UserState &msg) {
 				} else {
 					g.l->log(Log::Recording, tr("Recording stopped"));
 				}
-			} else if (pDst->cChannel == pSelf->cChannel) {
+			} else if (pDst->cChannel->allLinks().contains(pSelf->cChannel)) {
 				if (pDst->bRecording) {
 					g.l->log(Log::Recording, tr("%1 started recording.").arg(Log::formatClientUser(pDst, Log::Source)));
 				} else {
@@ -428,6 +458,10 @@ void MainWindow::msgUserState(const MumbleProto::UserState &msg) {
 			}
 
 			pmModel->moveUser(pDst, c);
+
+			if (pDst == pSelf) {
+				g.mw->updateChatBar();
+			}
 
 			if (log && (pDst != pSelf) && (pDst->cChannel == pSelf->cChannel)) {
 				if (pDst == pSrc)
@@ -569,6 +603,11 @@ void MainWindow::msgChannelRemove(const MumbleProto::ChannelRemove &msg) {
 void MainWindow::msgTextMessage(const MumbleProto::TextMessage &msg) {
 	ACTOR_INIT;
 	QString target;
+
+	// Silently drop the message if this user is set to "ignore"
+	if (pSrc && pSrc->bLocalIgnore)
+		return;
+
 	const QString &plainName = pSrc ? pSrc->qsName : tr("Server", "message from");
 	const QString &name = pSrc ? Log::formatClientUser(pSrc, Log::Source) : tr("Server", "message from");
 
@@ -628,17 +667,43 @@ void MainWindow::msgCryptSetup(const MumbleProto::CryptSetup &msg) {
 void MainWindow::msgContextAction(const MumbleProto::ContextAction &) {
 }
 
-void MainWindow::msgContextActionAdd(const MumbleProto::ContextActionAdd &msg) {
+void MainWindow::msgContextActionModify(const MumbleProto::ContextActionModify &msg) {
+	if (msg.has_operation() && msg.operation() == MumbleProto::ContextActionModify_Operation_Remove) {
+		removeContextAction(msg);
+		return;
+	}
+
+	if (msg.has_operation() && msg.operation() != MumbleProto::ContextActionModify_Operation_Add)
+		return;
+
 	QAction *a = new QAction(u8(msg.text()), g.mw);
 	a->setData(u8(msg.action()));
 	connect(a, SIGNAL(triggered()), this, SLOT(context_triggered()));
 	unsigned int ctx = msg.context();
-	if (ctx & MumbleProto::ContextActionAdd_Context_Server)
+	if (ctx & MumbleProto::ContextActionModify_Context_Server)
 		qlServerActions.append(a);
-	if (ctx & MumbleProto::ContextActionAdd_Context_User)
+	if (ctx & MumbleProto::ContextActionModify_Context_User)
 		qlUserActions.append(a);
-	if (ctx & MumbleProto::ContextActionAdd_Context_Channel)
+	if (ctx & MumbleProto::ContextActionModify_Context_Channel)
 		qlChannelActions.append(a);
+}
+
+void MainWindow::removeContextAction(const MumbleProto::ContextActionModify &msg) {
+	QString action = u8(msg.action());
+
+	QSet<QAction *> qs;
+	qs += qlServerActions.toSet();
+	qs += qlChannelActions.toSet();
+	qs += qlUserActions.toSet();
+
+	foreach(QAction *a, qs) {
+		if (a->data() == action) {
+			qlServerActions.removeOne(a);
+			qlChannelActions.removeOne(a);
+			qlUserActions.removeOne(a);
+			delete a;
+		}
+	}
 }
 
 void MainWindow::msgVersion(const MumbleProto::Version &msg) {
@@ -674,7 +739,7 @@ void MainWindow::msgPermissionQuery(const MumbleProto::PermissionQuery &msg) {
 			c->uiPermissions = 0;
 
 		// We always need the permissions of the current focus channel
-		if (current && current->iId != msg.channel_id()) {
+		if (current && current->iId != static_cast<int>(msg.channel_id())) {
 			g.sh->requestChannelPermissions(current->iId);
 
 			current->uiPermissions = ChanACL::All;
@@ -695,6 +760,10 @@ void MainWindow::msgCodecVersion(const MumbleProto::CodecVersion &msg) {
 	int alpha = msg.has_alpha() ? msg.alpha() : -1;
 	int beta = msg.has_beta() ? msg.beta() : -1;
 	bool pref = msg.prefer_alpha();
+
+#ifdef USE_OPUS
+	g.bOpus = msg.opus();
+#endif
 
 	// Workaround for broken 1.2.2 servers
 	if (g.sh && g.sh->uiVersion == 0x010202 && alpha != -1 && alpha == beta) {
@@ -745,4 +814,22 @@ void MainWindow::msgUserStats(const MumbleProto::UserStats &msg) {
 }
 
 void MainWindow::msgRequestBlob(const MumbleProto::RequestBlob &) {
+}
+
+void MainWindow::msgSuggestConfig(const MumbleProto::SuggestConfig &msg) {
+	if (msg.has_version() && (msg.version() > MumbleVersion::getRaw())) {
+		g.l->log(Log::Warning, tr("The server requests minimum client version %1").arg(MumbleVersion::toString(msg.version())));
+	}
+	if (msg.has_positional() && (msg.positional() != g.s.doPositionalAudio())) {
+		if (msg.positional())
+			g.l->log(Log::Warning, tr("The server requests positional audio be enabled."));
+		else
+			g.l->log(Log::Warning, tr("The server requests positional audio be disabled."));
+	}
+	if (msg.has_push_to_talk() && (msg.push_to_talk() != (g.s.atTransmit == Settings::PushToTalk))) {
+		if (msg.push_to_talk())
+			g.l->log(Log::Warning, tr("The server requests Push-to-Talk be enabled."));
+		else
+			g.l->log(Log::Warning, tr("The server requests Push-to-Talk be disabled."));
+	}
 }

@@ -1,5 +1,5 @@
-/* Copyright (C) 2010, Stefan Hacker <dd0t@users.sourceforge.net>
-   Copyright (C) 2010, Benjamin Jemlich <pcgod@users.sourceforge.net>
+/* Copyright (C) 2010-2011, Stefan Hacker <dd0t@users.sourceforge.net>
+   Copyright (C) 2010-2011, Benjamin Jemlich <pcgod@users.sourceforge.net>
 
    All rights reserved.
 
@@ -29,12 +29,10 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _VOICERECORDERDIALOG_H
-#define _VOICERECORDERDIALOG_H
+#ifndef VOICERECORDERDIALOG_H_
+#define VOICERECORDERDIALOG_H_
 
 #pragma once
-
-#include "mumble_pch.hpp"
 
 #include "ui_VoiceRecorderDialog.h"
 
@@ -62,4 +60,4 @@ class VoiceRecorderDialog : public QDialog, private Ui::VoiceRecorderDialog {
 		void reset(bool resettimer=true);
 };
 
-#endif // _VOICERECORDERDIALOG_H
+#endif // VOICERECORDERDIALOG_H_
